@@ -1,0 +1,13 @@
+[project]
+name = "webpanel-backend"
+version = "0.1.0"
+description = "FastAPI Core backend for HostPilot."
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

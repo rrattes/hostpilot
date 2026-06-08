@@ -72,3 +72,32 @@ Result summary: `118` tracked files, `0` missing tracked files.
 - `webpanel/backend/hostpilot.db` was modified locally when the development admin user was created. This file contains local runtime state and should not be committed as part of this log update.
 - The local development password was intentionally not written to this GitHub log.
 - Some duplicate/untracked files and directories currently exist at the repository root, such as root-level `README.md`, `agent/`, `docs/`, and `deploy/`. They were left uncommitted pending a separate cleanup decision.
+
+## Windows Dev/Test Script Validation
+
+Validation was performed from the `webpanel/` project root.
+
+```powershell
+.\scripts\test.ps1
+```
+
+Result:
+
+- Backend tests ran successfully: `30 passed`.
+- Agent tests ran successfully: `3 passed`.
+- Frontend `npm ci` and production build ran successfully.
+- Test runner summary reported all checks passed.
+
+The first test runner attempt failed during frontend `npm ci` with a Windows `EPERM` file-lock error because an older local Vite process was still holding a native dependency under `frontend/node_modules`. After stopping the stale development processes, the same script completed successfully without script changes.
+
+```powershell
+.\scripts\dev.ps1
+```
+
+Result:
+
+- Backend started on `http://127.0.0.1:8000`.
+- API docs were exposed at `http://127.0.0.1:8000/docs`.
+- Frontend started on `http://127.0.0.1:5173`.
+- Logs were written under `.dev/logs/`.
+- Validation processes were stopped after confirming both development ports.

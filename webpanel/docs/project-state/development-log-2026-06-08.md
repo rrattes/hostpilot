@@ -23,10 +23,11 @@ The canonical application files are available under `webpanel/`, including:
 - Agent mock package and tests.
 - Project documentation under `webpanel/docs/`.
 - Deployment placeholder directories under `webpanel/deploy/`.
+- Windows development/test scripts under `webpanel/scripts/`.
 
 ## Validation Commands
 
-The following checks passed locally:
+The following checks passed locally after the dashboard/sidebar UI refinement:
 
 ```powershell
 cd webpanel/backend
@@ -66,12 +67,24 @@ Result summary: `118` tracked files, `0` missing tracked files.
 - Started frontend locally at `http://127.0.0.1:5173`.
 - Created a local development admin user through the backend bootstrap script.
 - Confirmed login works through the backend API.
+- Refined the HostPilot dashboard visual design with tighter summary cards, denser module registry cards, improved borders/shadows/hover states, and reduced awkward empty space.
+- Refined the sidebar navigation hierarchy so Dashboard, Server, Agent, Notifications, Audit Log, and Jobs are primary navigation items.
+- Moved Settings into the bottom utility area while preserving the existing `/settings` route.
+- Repositioned Core as the active platform context in the sidebar footer.
+
+## Current Development Ports
+
+- Backend: `http://127.0.0.1:8000`
+- API docs: `http://127.0.0.1:8000/docs`
+- Frontend: `http://127.0.0.1:5173`
 
 ## Local-Only Notes
 
 - `webpanel/backend/hostpilot.db` was modified locally when the development admin user was created. This file contains local runtime state and should not be committed as part of this log update.
 - The local development password was intentionally not written to this GitHub log.
 - Some duplicate/untracked files and directories currently exist at the repository root, such as root-level `README.md`, `agent/`, `docs/`, and `deploy/`. They were left uncommitted pending a separate cleanup decision.
+- The local branch is ahead of and behind `origin/main`; remote reconciliation is still pending.
+- No frontend automated tests exist yet for the dashboard/sidebar shell.
 
 ## Windows Dev/Test Script Validation
 
@@ -101,3 +114,7 @@ Result:
 - Frontend started on `http://127.0.0.1:5173`.
 - Logs were written under `.dev/logs/`.
 - Validation processes were stopped after confirming both development ports.
+
+## Next Recommended Technical Step
+
+Reconcile the local branch with `origin/main`, then add focused frontend automated coverage for the dashboard/sidebar shell before adding new product behavior.

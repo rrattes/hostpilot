@@ -1,6 +1,6 @@
 # HostPilot Current Project State
 
-Date: 2026-06-05
+Date: 2026-06-08
 
 ## 1. Current Repository Structure
 
@@ -44,6 +44,9 @@ webpanel/
     modules/
     project-state/
     security/
+  scripts/
+    dev.ps1
+    test.ps1
 ```
 
 The repository is still rooted under the `webpanel/` folder and uses package names such as `webpanel-agent` and `webpanel-frontend`. The product-facing name is HostPilot.
@@ -57,6 +60,7 @@ The repository is still rooted under the `webpanel/` folder and uses package nam
 - Module registry with safe state management only.
 - Settings, local server display record, audit log, jobs, notifications, health/status, and mock agent gateway endpoints.
 - React/Vite frontend with dark technical layout, login, protected routes, dashboard, module cards, settings/server/audit/jobs/agent/notifications pages.
+- Refined dashboard and sidebar presentation with denser technical cards, clearer summary hierarchy, polished primary navigation, bottom utility Settings access, and Core shown as active platform context.
 - Python mock agent contract with allowlisted mock actions only.
 
 No real web server, Nginx, PHP, SSL, Docker, KVM, firewall, apt, systemd, SSH, RDP, VNC, or terminal feature is implemented.
@@ -196,6 +200,13 @@ Important: the backend mock gateway executes in-process mock code only. It does 
 
 Implemented dark technical shell with sidebar, topbar, content area, notification bell/dropdown, and protected navigation.
 
+Latest UI refinement:
+- Sidebar primary navigation is limited to Dashboard, Server, Agent, Notifications, Audit Log, and Jobs.
+- Settings was moved to a compact bottom utility area while preserving the `/settings` route.
+- Core is shown as the active platform context instead of a random module navigation button.
+- Dashboard summary cards were tightened with improved spacing, hierarchy, borders, shadows, hover states, and reduced awkward empty space.
+- Module registry cards were made denser while preserving existing module state controls.
+
 ### Login
 
 Implemented login page. The frontend stores the JWT in `sessionStorage`. It loads the current user and permissions on app start.
@@ -323,6 +334,7 @@ No matches were found in backend or agent source.
 - No notification preferences or delivery channels.
 - No frontend automated tests yet.
 - GitHub Actions CI has been added at `.github/workflows/ci.yml` to run backend tests with migrations, agent tests, and frontend build on push and pull request to `main`.
+- Windows development and test scripts exist at `scripts/dev.ps1` and `scripts/test.ps1`.
 
 ## 8. Known Risks
 
@@ -335,6 +347,25 @@ No matches were found in backend or agent source.
 - There is no formal threat model yet.
 
 ## 9. Exact Commands To Run
+
+### Windows Dev Runner
+
+```powershell
+cd webpanel
+.\scripts\dev.ps1
+```
+
+Development ports:
+- Backend: `http://127.0.0.1:8000`
+- API docs: `http://127.0.0.1:8000/docs`
+- Frontend: `http://127.0.0.1:5173`
+
+### Windows Test Runner
+
+```powershell
+cd webpanel
+.\scripts\test.ps1
+```
 
 ### Backend
 
@@ -392,4 +423,4 @@ npm run build
 
 ## 10. Recommended Next Step
 
-Recommended next step: add a minimal CI workflow that runs backend tests, agent tests, frontend build, and Alembic migration validation. This should happen before adding real module behavior, because the project now has enough Core surface area that regressions are easy to introduce.
+Recommended next technical step: reconcile the local branch with `origin/main` and then add frontend automated coverage for the dashboard/sidebar shell before adding new product behavior.

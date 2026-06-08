@@ -14,8 +14,11 @@ repeatable lab installer, but it is not a production installer.
 - Frontend is built before Nginx serves `frontend/dist`.
 - Secrets are supplied outside git through `/etc/hostpilot/core.env`.
 - Ubuntu 26.04 currently ships Python 3.14. HostPilot was validated in this lab
-  with an isolated Python 3.13 runtime under `/opt/hostpilot/python` because the
-  pinned backend dependencies do not yet install cleanly on Python 3.14.
+  with an isolated Python 3.13 runtime under `/opt/hostpilot/python`.
+- Runtime decision: the Ubuntu 26.04 lab uses `/opt/hostpilot/python` as the
+  application Python runtime for Core and Agent venv creation. The app does not
+  rely on Ubuntu's system Python 3.14 yet because pinned backend dependencies
+  have not been migrated and validated on Python 3.14.
 - Root SSH was used only for the `192.168.0.63` lab validation. Production
   deployment should use a least-privilege operating procedure.
 
@@ -54,6 +57,7 @@ The installer:
   `/opt/hostpilot/webpanel/backend/hostpilot.db` when redeploying.
 - Uses isolated Python 3.13 under `/opt/hostpilot/python` for backend and Agent
   virtual environments.
+- Verifies that both backend and Agent virtual environments use Python 3.13.
 - Installs backend and Agent dependencies.
 - Runs Alembic migrations.
 - Builds the frontend with `npm ci` and `npm run build`.
@@ -73,7 +77,7 @@ sudo /opt/hostpilot/webpanel/deploy/scripts/check-lab.sh
 ```
 
 Expected summary: all checks pass for Core, Agent, Nginx, loopback bindings,
-Core health, Agent health, and the lab UI.
+Core/Agent Python 3.13 runtime, Core health, Agent health, and the lab UI.
 
 ## Build Backend
 
@@ -283,4 +287,5 @@ Result: production build completed successfully.
 - No Nginx site management is included.
 - No privileged Agent actions are included.
 - The Agent remains limited to allowlisted mock actions.
-- Python 3.14 support remains a dependency compatibility gap for Ubuntu 26.04.
+- Python 3.14 support remains intentionally deferred. The supported Ubuntu 26.04
+  lab runtime is isolated Python 3.13 under `/opt/hostpilot/python`.

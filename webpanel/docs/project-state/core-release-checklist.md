@@ -21,13 +21,13 @@ Status legend: Done, Partial, Pending.
 | Core backup | Partial | Manual Core backup API/UI creates and lists local SQLite/Core config backup metadata and artifacts. No restore, download endpoint, schedule, cloud backup, website backup, Nginx backup, or SSL backup. |
 | Dev runner | Done | Windows `scripts/dev.ps1` and `scripts/test.ps1` exist under `webpanel/` for local dev/test flow. |
 | CI | Done | GitHub Actions workflow exists at `.github/workflows/ci.yml` for backend tests/migrations, agent tests, and frontend build. |
-| Ubuntu lab deploy | Partial | Ubuntu lab docs and systemd/Nginx templates exist and have been lab-validated. It remains lab-only, not production deployment guidance. |
+| Ubuntu lab deploy | Partial | Ubuntu lab docs and systemd/Nginx templates exist and have been lab-validated. Lab runtime is pinned to isolated Python 3.13 under `/opt/hostpilot/python`; it remains lab-only, not production deployment guidance. |
 | Security gate | Done | `docs/security/core-security-gate.md` exists with pass/fail security validation checklists. |
-| Installer lab | Partial | Repeatable Ubuntu 26.04 lab installer and check scripts exist. Python 3.14 dependency compatibility remains a lab/runtime decision risk. |
+| Installer lab | Partial | Repeatable Ubuntu 26.04 lab installer and check scripts exist. The Python runtime decision is resolved for lab use: create backend and Agent venvs from isolated Python 3.13 under `/opt/hostpilot/python`. Python 3.14 migration remains deferred. |
 
 ## Remaining Core Blockers Before Web Module
 
-- Resolve the Ubuntu 26.04 Python runtime decision: support Python 3.14 dependencies or formally pin/document isolated Python 3.13 for the lab.
+- Validate the Python 3.13 lab runtime through the updated installer/check scripts on the Ubuntu 26.04 host.
 - Run and record the Core Security Gate results, not just the checklist document.
 - Add focused frontend regression tests for authenticated routing and Core admin pages.
 - Complete an audit coverage matrix review and close any missing Core workflow events.
@@ -47,7 +47,7 @@ Status legend: Done, Partial, Pending.
 
 ## Next 5 Technical Tasks
 
-1. Resolve and document the Ubuntu 26.04 Python runtime path for lab installs.
+1. Re-run `deploy/scripts/install-lab.sh` and `deploy/scripts/check-lab.sh` on the Ubuntu 26.04 lab host to validate the Python 3.13 pin end-to-end.
 2. Run the Core Security Gate and record pass/fail results in project-state docs.
 3. Add frontend tests for login-protected routing, sidebar utility links, Users, Roles, Backups, and Settings account security.
 4. Build an audit coverage matrix for auth/session, RBAC, users, roles, settings, server record, jobs, notifications, agent, and backups.

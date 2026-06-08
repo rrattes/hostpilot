@@ -14,7 +14,7 @@ Environment=HOSTPILOT_HOST=127.0.0.1
 Environment=HOSTPILOT_PORT=8000
 Environment=HOSTPILOT_AGENT_URL=http://127.0.0.1:8765
 EnvironmentFile=-/etc/hostpilot/core.env
-ExecStart=/opt/hostpilot/webpanel/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+ExecStart=/opt/hostpilot/webpanel/backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=20

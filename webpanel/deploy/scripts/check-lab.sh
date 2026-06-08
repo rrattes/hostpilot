@@ -3,6 +3,7 @@ set -euo pipefail
 
 PASS_COUNT=0
 FAIL_COUNT=0
+EXPECTED_PYTHON_VERSION="3.13"
 
 pass() {
   PASS_COUNT=$((PASS_COUNT + 1))
@@ -46,10 +47,29 @@ check_loopback_binding() {
   fi
 }
 
+check_python_version() {
+  local name="$1"
+  local python_bin="$2"
+  if [ ! -x "${python_bin}" ]; then
+    fail "${name} Python not found at ${python_bin}"
+    return
+  fi
+
+  local version
+  version="$("${python_bin}" -c 'import sys; print(".".join(map(str, sys.version_info[:2])))' 2>/dev/null || true)"
+  if [ "${version}" = "${EXPECTED_PYTHON_VERSION}" ]; then
+    pass "${name} uses Python ${EXPECTED_PYTHON_VERSION}"
+  else
+    fail "${name} uses Python ${version:-unknown}, expected ${EXPECTED_PYTHON_VERSION}"
+  fi
+}
+
 main() {
   check_service hostpilot-core.service
   check_service hostpilot-agent.service
   check_service nginx.service
+  check_python_version "Core venv" "/opt/hostpilot/webpanel/backend/.venv/bin/python"
+  check_python_version "Agent venv" "/opt/hostpilot/webpanel/agent/.venv/bin/python"
   check_loopback_binding "Core" 8000
   check_loopback_binding "Agent" 8765
   check_curl "Core health" "http://127.0.0.1:8000/health" "200"

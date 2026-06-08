@@ -5,6 +5,7 @@ APP_ROOT="/opt/hostpilot"
 APP_DIR="${APP_ROOT}/webpanel"
 PYTHON_ROOT="${APP_ROOT}/python"
 PYTHON_BIN="${PYTHON_ROOT}/cpython-3.13-linux-x86_64-gnu/bin/python3.13"
+PYTHON_VERSION_PREFIX="3.13"
 HOSTPILOT_USER="hostpilot"
 HOSTPILOT_GROUP="hostpilot"
 CORE_UNIT="/etc/systemd/system/hostpilot-core.service"
@@ -71,6 +72,12 @@ ensure_python_runtime() {
     mkdir -p "${PYTHON_ROOT}"
     UV_PYTHON_INSTALL_DIR="${PYTHON_ROOT}" uv python install 3.13
   fi
+  local version
+  version="$("${PYTHON_BIN}" -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')"
+  if [ "${version}" != "${PYTHON_VERSION_PREFIX}" ]; then
+    fail "Expected isolated Python ${PYTHON_VERSION_PREFIX} at ${PYTHON_BIN}, found ${version}."
+  fi
+  log "Using isolated Python $("${PYTHON_BIN}" --version) at ${PYTHON_BIN}."
 }
 
 preserve_runtime_state() {
@@ -140,6 +147,7 @@ build_backend() {
   rm -rf .venv
   "${PYTHON_BIN}" -m venv .venv
   . .venv/bin/activate
+  python -c 'import sys; assert sys.version_info[:2] == (3, 13), sys.version'
   pip install --upgrade pip
   pip install -r requirements.txt
   alembic upgrade head
@@ -152,6 +160,7 @@ build_agent() {
   rm -rf .venv
   "${PYTHON_BIN}" -m venv .venv
   . .venv/bin/activate
+  python -c 'import sys; assert sys.version_info[:2] == (3, 13), sys.version'
   pip install --upgrade pip
   pip install -r requirements.txt
   deactivate

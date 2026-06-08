@@ -1,7 +1,7 @@
 # HostPilot Ubuntu Lab Deploy
 
-This is a lab deployment template for Ubuntu Server 26.04. It is not an installer
-and does not perform system changes by itself.
+This is a lab deployment workflow for Ubuntu Server 26.04. It includes a
+repeatable lab installer, but it is not a production installer.
 
 ## Assumptions
 
@@ -35,7 +35,49 @@ HOSTPILOT_ACCESS_TOKEN_MINUTES=60
 HOSTPILOT_AGENT_TIMEOUT_SECONDS=2
 ```
 
+## Repeatable Lab Installer
+
+Run the installer from the `webpanel/` project root on the Ubuntu 26.04 lab
+host:
+
+```bash
+sudo ./deploy/scripts/install-lab.sh
+```
+
+The installer:
+
+- Installs or confirms `python3`, `python3-venv`, `python3-pip`, `nodejs`,
+  `npm`, `nginx`, `git`, `curl`, and `uv`.
+- Deploys the current `webpanel/` tree to `/opt/hostpilot/webpanel`.
+- Preserves `/etc/hostpilot/core.env` and `/etc/hostpilot/agent.env`.
+- Preserves an existing lab SQLite database at
+  `/opt/hostpilot/webpanel/backend/hostpilot.db` when redeploying.
+- Uses isolated Python 3.13 under `/opt/hostpilot/python` for backend and Agent
+  virtual environments.
+- Installs backend and Agent dependencies.
+- Runs Alembic migrations.
+- Builds the frontend with `npm ci` and `npm run build`.
+- Installs only the HostPilot systemd units:
+  `hostpilot-core.service` and `hostpilot-agent.service`.
+- Installs only the HostPilot Nginx lab config:
+  `/etc/nginx/conf.d/hostpilot-lab.conf`.
+- Starts/restarts HostPilot services and reloads Nginx.
+
+The installer does not configure SSL, domains, production hardening, unrelated
+Nginx sites, or real Agent OS actions.
+
+Run the validation helper after installation:
+
+```bash
+sudo /opt/hostpilot/webpanel/deploy/scripts/check-lab.sh
+```
+
+Expected summary: all checks pass for Core, Agent, Nginx, loopback bindings,
+Core health, Agent health, and the lab UI.
+
 ## Build Backend
+
+Manual backend setup remains available for debugging:
 
 ```bash
 cd /opt/hostpilot/webpanel/backend
@@ -49,6 +91,8 @@ The Core service template binds Uvicorn to `127.0.0.1:8000`.
 
 ## Build Agent
 
+Manual Agent setup remains available for debugging:
+
 ```bash
 cd /opt/hostpilot/webpanel/agent
 /opt/hostpilot/python/cpython-3.13-linux-x86_64-gnu/bin/python3.13 -m venv .venv
@@ -60,6 +104,8 @@ The Agent template starts `python -m webpanel_agent.main` and is expected to bin
 to `127.0.0.1` only. The current agent exposes only mock allowlisted actions.
 
 ## Build Frontend
+
+Manual frontend setup remains available for debugging:
 
 ```bash
 cd /opt/hostpilot/webpanel/frontend
@@ -83,12 +129,9 @@ into real system locations.
 
 ## Lab Activation Outline
 
-1. Copy reviewed systemd templates into the lab systemd unit directory.
-2. Copy the reviewed Nginx config into the lab Nginx configuration area.
-3. Reload systemd and Nginx using your lab operating procedure.
-4. Start the Agent service first.
-5. Start the Core service second.
-6. Open `http://<lab-host>:8080`.
+1. Run `sudo ./deploy/scripts/install-lab.sh` from the `webpanel/` project root.
+2. Run `sudo /opt/hostpilot/webpanel/deploy/scripts/check-lab.sh`.
+3. Open `http://<lab-host>:8080`.
 
 ## Validation
 
@@ -235,7 +278,7 @@ Result: production build completed successfully.
 
 ## Current Limits
 
-- No installer script is provided.
+- The installer is lab-only and targets Ubuntu 26.04.
 - No SSL automation is included.
 - No Nginx site management is included.
 - No privileged Agent actions are included.

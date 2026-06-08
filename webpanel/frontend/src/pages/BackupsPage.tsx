@@ -6,6 +6,7 @@ import {
   listCoreBackups,
   type CoreBackup,
 } from "../core/api/backups";
+import { ApiError } from "../core/api/client";
 import { useAuth } from "../core/auth/AuthProvider";
 
 interface BackupsPageProps {
@@ -52,8 +53,12 @@ export function BackupsPage({ canCreate }: BackupsPageProps) {
           ? `Core backup ${safeBackupName(backup.file_path)} created and backup list refreshed.`
           : `Core backup ${safeBackupName(backup.file_path)} created, but metadata refresh failed.`,
       );
-    } catch {
-      setError("Core backup failed. Review the audit log and backend logs.");
+    } catch (backupError) {
+      setError(
+        backupError instanceof ApiError
+          ? `Core backup failed: ${backupError.message}`
+          : "Core backup failed. Review the audit log and backend logs.",
+      );
     } finally {
       setIsCreating(false);
     }

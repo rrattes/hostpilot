@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.audit.events import record_audit_event
 from app.core.auth.dependencies import get_current_user
-from app.core.backups.service import create_core_backup
+from app.core.backups.service import CoreBackupError, create_core_backup
 from app.core.rbac.permissions import require_permission
 from app.db.models import CoreBackup, User
 from app.db.session import get_db
@@ -61,7 +61,8 @@ def create_backup(
         db.refresh(backup)
         return _backup_read(backup)
     except Exception as exc:
-        target_id = backup.id if backup is not None else None
+        reason = str(exc) if isinstance(exc, CoreBackupError) else "Core backup failed while writing archive."
+        target_id = backup.id if backup is not None else getattr(exc, "backup_id", None)
         record_audit_event(
             db,
             action="core.backup.failed",
@@ -69,12 +70,12 @@ def create_backup(
             target_id=target_id,
             actor_user_id=user.id,
             outcome="failure",
-            metadata={"reason": exc.__class__.__name__},
+            metadata={"reason": reason, "error_type": exc.__class__.__name__},
         )
         db.commit()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Core backup failed",
+            detail=reason,
         ) from exc
 
 

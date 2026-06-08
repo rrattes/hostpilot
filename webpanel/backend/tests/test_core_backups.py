@@ -53,7 +53,7 @@ def _seed_user(
 
 def test_admin_can_create_and_list_core_backups(tmp_path, monkeypatch) -> None:
     database_path = tmp_path / "hostpilot.db"
-    backup_dir = tmp_path / "backups"
+    backup_dir = tmp_path / "Windows Dev Backups"
     monkeypatch.setenv("HOSTPILOT_BACKUP_DIR", str(backup_dir))
     client, testing_session_local = _client_for_database(database_path)
     try:
@@ -100,8 +100,11 @@ def test_admin_can_create_and_list_core_backups(tmp_path, monkeypatch) -> None:
 
         assert backup is not None
         assert backup.status == "completed"
+        assert backup.file_path == str(backup_path)
+        assert backup.size_bytes == backup_path.stat().st_size
         assert audit_event is not None
         assert audit_event.outcome == "success"
+        assert "database/hostpilot.db" in audit_event.metadata_json
     finally:
         _clear_overrides()
 
@@ -145,12 +148,58 @@ def test_backup_failure_is_audited(tmp_path, monkeypatch) -> None:
         )
 
         assert response.status_code == 500
+        assert "Unable to create backup directory" in response.json()["detail"]
         with testing_session_local() as db:
             audit_event = db.scalar(
                 select(AuditEvent).where(AuditEvent.action == "core.backup.failed")
             )
+            backups = db.scalars(select(CoreBackup)).all()
 
         assert audit_event is not None
         assert audit_event.outcome == "failure"
+        assert "Unable to create backup directory" in audit_event.metadata_json
+        assert backups == []
+    finally:
+        _clear_overrides()
+
+
+def test_backup_archive_failure_persists_failed_metadata(tmp_path, monkeypatch) -> None:
+    backup_dir = tmp_path / "backups"
+    monkeypatch.setenv("HOSTPILOT_BACKUP_DIR", str(backup_dir))
+    client, testing_session_local = _client_for_database(tmp_path / "hostpilot.db")
+
+    def fail_sqlite_copy(_source: Path, _destination: Path) -> None:
+        from app.core.backups.service import CoreBackupError
+
+        raise CoreBackupError("Unable to archive SQLite database: denied")
+
+    monkeypatch.setattr("app.core.backups.service._copy_sqlite_database", fail_sqlite_copy)
+    try:
+        token = _seed_user(
+            testing_session_local,
+            "admin@example.com",
+            ["core.backup.create", "core.backup.view"],
+        )
+
+        response = client.post(
+            "/api/core/backups",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 500
+        assert "Unable to archive SQLite database" in response.json()["detail"]
+
+        with testing_session_local() as db:
+            backups = db.scalars(select(CoreBackup)).all()
+            audit_event = db.scalar(
+                select(AuditEvent).where(AuditEvent.action == "core.backup.failed")
+            )
+
+        assert len(backups) == 1
+        assert backups[0].status == "failed"
+        assert backups[0].file_path.startswith(str(backup_dir))
+        assert audit_event is not None
+        assert audit_event.target_id == backups[0].id
+        assert "Unable to archive SQLite database" in audit_event.metadata_json
     finally:
         _clear_overrides()

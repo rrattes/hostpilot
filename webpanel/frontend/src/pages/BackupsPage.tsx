@@ -24,12 +24,14 @@ export function BackupsPage({ canCreate }: BackupsPageProps) {
   );
 
   async function loadBackups() {
-    if (!token) return;
+    if (!token) return false;
     try {
       setBackups(await listCoreBackups(token));
       setError(null);
+      return true;
     } catch {
       setError("Unable to load Core backup metadata.");
+      return false;
     }
   }
 
@@ -44,8 +46,12 @@ export function BackupsPage({ canCreate }: BackupsPageProps) {
     setError(null);
     try {
       const backup = await createCoreBackup(token);
-      setBackups((current) => [backup, ...current.filter((item) => item.id !== backup.id)]);
-      setMessage("Core backup created and audit event recorded.");
+      const refreshed = await loadBackups();
+      setMessage(
+        refreshed
+          ? `Core backup ${safeBackupName(backup.file_path)} created and backup list refreshed.`
+          : `Core backup ${safeBackupName(backup.file_path)} created, but metadata refresh failed.`,
+      );
     } catch {
       setError("Core backup failed. Review the audit log and backend logs.");
     } finally {

@@ -22,13 +22,13 @@ Status legend: Done, Partial, Pending.
 | Dev runner | Done | Windows `scripts/dev.ps1` and `scripts/test.ps1` exist under `webpanel/` for local dev/test flow. |
 | CI | Done | GitHub Actions workflow exists at `.github/workflows/ci.yml` for backend tests/migrations, agent tests, and frontend build. |
 | Ubuntu lab deploy | Partial | Ubuntu lab docs and systemd/Nginx templates exist and have been lab-validated. Lab runtime is pinned to isolated Python 3.13 under `/opt/hostpilot/python`; it remains lab-only, not production deployment guidance. |
-| Security gate | Done | `docs/security/core-security-gate.md` exists with pass/fail security validation checklists. |
+| Security gate | Partial | `docs/security/core-security-gate.md` exists and local results are recorded in `docs/project-state/security-gate-results-2026-06-08.md`. Python dependency scan, Python security lint, ZAP, Nessus/OpenVAS, and formal IDOR/BOLA matrix remain pending. |
 | Installer lab | Partial | Repeatable Ubuntu 26.04 lab installer and check scripts exist. The Python runtime decision is resolved for lab use: create backend and Agent venvs from isolated Python 3.13 under `/opt/hostpilot/python`. Python 3.14 migration remains deferred. |
 
 ## Remaining Core Blockers Before Web Module
 
 - Validate the Python 3.13 lab runtime through the updated installer/check scripts on the Ubuntu 26.04 host.
-- Run and record the Core Security Gate results, not just the checklist document.
+- Complete pending Security Gate items: Python dependency scan, Python security lint, ZAP baseline, Nessus/OpenVAS readiness, and formal RBAC/IDOR/BOLA matrix.
 - Add focused frontend regression tests for authenticated routing and Core admin pages.
 - Complete an audit coverage matrix review and close any missing Core workflow events.
 - Validate GitHub Actions on the remote branch after reconciliation with `origin/main`.
@@ -48,7 +48,7 @@ Status legend: Done, Partial, Pending.
 ## Next 5 Technical Tasks
 
 1. Re-run `deploy/scripts/install-lab.sh` and `deploy/scripts/check-lab.sh` on the Ubuntu 26.04 lab host to validate the Python 3.13 pin end-to-end.
-2. Run the Core Security Gate and record pass/fail results in project-state docs.
+2. Add `pip-audit` and Bandit execution to local/CI security validation or document an equivalent scanner.
 3. Add frontend tests for login-protected routing, sidebar utility links, Users, Roles, Backups, and Settings account security.
-4. Build an audit coverage matrix for auth/session, RBAC, users, roles, settings, server record, jobs, notifications, agent, and backups.
+4. Build an audit and RBAC/IDOR/BOLA coverage matrix for auth/session, users, roles, settings, server record, jobs, notifications, agent, and backups.
 5. Reconcile with `origin/main`, push, and validate GitHub Actions CI on GitHub.

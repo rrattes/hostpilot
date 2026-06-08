@@ -1,0 +1,32 @@
+[Unit]
+Description=HostPilot Core API
+Documentation=README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hostpilot
+Group=hostpilot
+WorkingDirectory=/opt/hostpilot/webpanel/backend
+Environment=HOSTPILOT_ENV=production
+Environment=HOSTPILOT_HOST=127.0.0.1
+Environment=HOSTPILOT_PORT=8000
+Environment=HOSTPILOT_AGENT_URL=http://127.0.0.1:8765
+EnvironmentFile=-/etc/hostpilot/core.env
+ExecStart=/opt/hostpilot/webpanel/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/hostpilot/webpanel/backend
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target

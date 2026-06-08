@@ -1,0 +1,32 @@
+[Unit]
+Description=HostPilot Local Agent
+Documentation=README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=hostpilot
+Group=hostpilot
+WorkingDirectory=/opt/hostpilot/webpanel/agent
+Environment=HOSTPILOT_ENV=production
+Environment=HOSTPILOT_AGENT_HOST=127.0.0.1
+Environment=HOSTPILOT_AGENT_PORT=8765
+EnvironmentFile=-/etc/hostpilot/agent.env
+ExecStart=/opt/hostpilot/webpanel/agent/.venv/bin/python -m webpanel_agent.main
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=20
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/hostpilot/webpanel/agent
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

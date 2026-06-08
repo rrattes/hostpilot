@@ -888,6 +888,15 @@ textarea {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.empty-state-panel {
+  background: #0d141d;
+  border: 1px solid #223041;
+  border-radius: 8px;
+  color: #8f9dad;
+  font-size: 13px;
+  padding: 14px;
+}
+
 .role-card {
   background:
     linear-gradient(180deg, rgba(18, 28, 39, 0.92), rgba(10, 17, 24, 0.96)),

@@ -10,6 +10,7 @@ export function RolesPage() {
   const { token } = useAuth();
   const [roles, setRoles] = useState<RoleItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const totalPermissions = useMemo(
     () => new Set(roles.flatMap((role) => role.permissions)).size,
     [roles],
@@ -17,15 +18,21 @@ export function RolesPage() {
 
   useEffect(() => {
     if (!token) {
+      setIsLoading(false);
       return;
     }
 
+    setIsLoading(true);
     listRoles(token)
       .then((response) => {
-        setRoles(sortRoles(response));
+        setRoles(sortRoles(response.map(normalizeRole)));
         setError(null);
       })
-      .catch(() => setError("Unable to load roles and permissions."));
+      .catch(() => {
+        setRoles([]);
+        setError("Unable to load roles and permissions.");
+      })
+      .finally(() => setIsLoading(false));
   }, [token]);
 
   return (
@@ -56,6 +63,11 @@ export function RolesPage() {
           <span>Role creation and permission editing are intentionally not exposed in the Core UI yet.</span>
         </div>
       </div>
+
+      {isLoading ? <div className="empty-state-panel">Loading roles and permissions.</div> : null}
+      {!isLoading && !error && roles.length === 0 ? (
+        <div className="empty-state-panel">No roles are available for this Core environment.</div>
+      ) : null}
 
       <div className="roles-grid">
         {roles.map((role) => (
@@ -126,4 +138,12 @@ function sortRoles(roles: RoleItem[]) {
     }
     return left.slug.localeCompare(right.slug);
   });
+}
+
+function normalizeRole(role: RoleItem): RoleItem {
+  return {
+    ...role,
+    permissions: Array.isArray(role.permissions) ? role.permissions : [],
+    users: Array.isArray(role.users) ? role.users : [],
+  };
 }

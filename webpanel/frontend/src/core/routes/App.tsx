@@ -19,6 +19,7 @@ import { LoginPage } from "../../pages/LoginPage";
 import { NotificationsPage } from "../../pages/NotificationsPage";
 import { ServerPage } from "../../pages/ServerPage";
 import { SettingsPage } from "../../pages/SettingsPage";
+import { UsersPage } from "../../pages/UsersPage";
 
 export function App() {
   return (
@@ -235,6 +236,19 @@ function renderProtectedPage(
   if (path === "/settings") {
     return hasPermission("settings.view") ? (
       <SettingsPage canEdit={hasPermission("settings.edit")} />
+    ) : (
+      <DashboardPage
+        agentStatus={agentStatus}
+        canManageModules={hasPermission("modules.manage")}
+        healthStatus={healthStatus}
+        modules={modules}
+        onModuleStateChange={onModuleStateChange}
+      />
+    );
+  }
+  if (path === "/users") {
+    return hasPermission("core.admin") ? (
+      <UsersPage />
     ) : (
       <DashboardPage
         agentStatus={agentStatus}

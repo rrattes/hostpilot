@@ -9,6 +9,7 @@ import {
   SlidersHorizontal,
   ShieldCheck,
   UserCircle,
+  Users,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -52,6 +53,7 @@ export function AppLayout({
     { label: "Jobs", path: "/jobs", icon: ClipboardList, permission: "jobs.view" },
   ];
   const settingsPage = { label: "Settings", path: "/settings", icon: SlidersHorizontal, permission: "settings.view" };
+  const usersPage = { label: "Users", path: "/users", icon: Users, permission: "core.admin" };
   const activeModule = modules.find((module) => module.slug === "core") ?? modules.find((module) => module.enabled);
 
   return (
@@ -96,16 +98,22 @@ export function AppLayout({
             <ShieldCheck size={15} />
           </div>
 
-          {hasPermission(settingsPage.permission) ? (
-            <button
-              className={`utility-nav-item ${currentPath === settingsPage.path ? "active" : ""}`}
-              onClick={() => onNavigate(settingsPage.path)}
-              type="button"
-            >
-              <span>{settingsPage.label}</span>
-              <SlidersHorizontal size={15} />
-            </button>
-          ) : null}
+          {[usersPage, settingsPage]
+            .filter((page) => hasPermission(page.permission))
+            .map((page) => {
+              const Icon = page.icon;
+              return (
+                <button
+                  className={`utility-nav-item ${currentPath === page.path ? "active" : ""}`}
+                  key={page.path}
+                  onClick={() => onNavigate(page.path)}
+                  type="button"
+                >
+                  <span>{page.label}</span>
+                  <Icon size={15} />
+                </button>
+              );
+            })}
         </div>
       </aside>
 

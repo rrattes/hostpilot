@@ -594,7 +594,11 @@ textarea {
 
 .setting-editor input,
 .server-panel input,
-.server-panel textarea {
+.server-panel textarea,
+.user-create-panel input,
+.user-create-panel select,
+.inline-control select,
+.password-reset-row input {
   background: #080d13;
   border: 1px solid #283748;
   border-radius: 7px;
@@ -612,7 +616,11 @@ textarea {
 
 .setting-editor input:disabled,
 .server-panel input:disabled,
-.server-panel textarea:disabled {
+.server-panel textarea:disabled,
+.user-create-panel input:disabled,
+.user-create-panel select:disabled,
+.inline-control select:disabled,
+.password-reset-row input:disabled {
   color: #8f9dad;
   opacity: 0.82;
 }
@@ -627,6 +635,16 @@ textarea {
   border: 1px solid #7c2c3b;
   border-radius: 7px;
   color: #ffc7d0;
+  font-size: 13px;
+  line-height: 1.45;
+  padding: 10px 11px;
+}
+
+.success-message {
+  background: #10221c;
+  border: 1px solid #2e7d68;
+  border-radius: 7px;
+  color: #b9f3df;
   font-size: 13px;
   line-height: 1.45;
   padding: 10px 11px;
@@ -693,6 +711,73 @@ textarea {
 
 .data-table tr:last-child td {
   border-bottom: 0;
+}
+
+.user-create-panel {
+  align-items: end;
+  background: #0d141d;
+  border: 1px solid #223041;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 1.1fr) minmax(160px, 0.9fr) minmax(160px, 0.9fr) minmax(120px, 0.7fr) auto auto;
+  padding: 14px;
+}
+
+.user-create-panel label,
+.inline-control {
+  color: #c7d0dc;
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.checkbox-row {
+  align-items: center;
+  display: flex !important;
+  gap: 8px !important;
+  min-height: 38px;
+}
+
+.checkbox-row input {
+  min-height: auto;
+  width: auto;
+}
+
+.users-table td strong,
+.users-table td span {
+  display: block;
+}
+
+.users-table td strong {
+  color: #eef4f8;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.users-table td span {
+  color: #8f9dad;
+  font-size: 12px;
+}
+
+.inline-control {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  min-width: 170px;
+}
+
+.inline-control svg {
+  color: #7f8b99;
+  flex: 0 0 auto;
+}
+
+.password-reset-row {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(150px, 1fr) 36px;
 }
 
 .settings-list,
@@ -796,12 +881,26 @@ textarea {
 }
 
 .icon-text-button {
+  align-items: center;
   background: #101923;
   border: 1px solid #263546;
   border-radius: 7px;
   color: #d8dee9;
+  display: inline-flex;
+  gap: 7px;
+  justify-content: center;
   min-height: 34px;
   padding: 0 10px;
+}
+
+.icon-text-button.state-active {
+  border-color: #2e7d68;
+  color: #b9f3df;
+}
+
+.icon-text-button.state-disabled {
+  border-color: #7c2c3b;
+  color: #ffc7d0;
 }
 
 .modal-backdrop {
@@ -918,6 +1017,11 @@ textarea {
   }
 
   .setting-row {
+    grid-template-columns: 1fr;
+  }
+
+  .user-create-panel {
+    align-items: stretch;
     grid-template-columns: 1fr;
   }
 }

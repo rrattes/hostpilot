@@ -665,6 +665,7 @@ textarea {
 .setting-editor input,
 .server-panel input,
 .server-panel textarea,
+.account-password-form input,
 .user-create-panel input,
 .user-create-panel select,
 .inline-control select,
@@ -687,6 +688,7 @@ textarea {
 .setting-editor input:disabled,
 .server-panel input:disabled,
 .server-panel textarea:disabled,
+.account-password-form input:disabled,
 .user-create-panel input:disabled,
 .user-create-panel select:disabled,
 .inline-control select:disabled,
@@ -925,11 +927,68 @@ textarea {
 }
 
 .setting-row,
+.account-panel,
 .server-panel {
   background: #0d141d;
   border: 1px solid #223041;
   border-radius: 8px;
   padding: 16px;
+}
+
+.account-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.account-panel h3 {
+  color: #eef4f8;
+  font-size: 16px;
+  margin: 4px 0 0;
+}
+
+.account-panel p {
+  color: #8f9dad;
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 7px 0 0;
+}
+
+.account-panel p strong {
+  color: #c7d0dc;
+}
+
+.account-password-form {
+  display: grid;
+  gap: 12px;
+}
+
+.account-password-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.account-password-form label {
+  color: #c7d0dc;
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.password-policy-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.password-policy-list span {
+  background: #101923;
+  border: 1px solid #263546;
+  border-radius: 999px;
+  color: #91a0af;
+  font-size: 12px;
+  padding: 5px 8px;
 }
 
 .setting-row {
@@ -1164,6 +1223,10 @@ textarea {
   }
 
   .setting-row {
+    grid-template-columns: 1fr;
+  }
+
+  .account-password-grid {
     grid-template-columns: 1fr;
   }
 

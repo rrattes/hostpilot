@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.audit.events import record_audit_event
 from app.core.auth.security import hash_password, validate_password_policy
@@ -17,9 +17,18 @@ class AdminStatus(BaseModel):
     status: str
 
 
+class RoleUserRead(BaseModel):
+    id: int
+    email: str
+    display_name: str
+    is_active: bool
+
+
 class RoleRead(BaseModel):
     slug: str
     name: str
+    permissions: list[str] = Field(default_factory=list)
+    users: list[RoleUserRead] = Field(default_factory=list)
 
 
 class UserRead(BaseModel):
@@ -67,8 +76,12 @@ def admin_status() -> AdminStatus:
     dependencies=[Depends(require_permission("core.admin"))],
 )
 def list_roles(db: Session = Depends(get_db)) -> list[RoleRead]:
-    roles = db.scalars(select(Role).order_by(Role.slug)).all()
-    return [RoleRead(slug=role.slug, name=role.name) for role in roles]
+    roles = db.scalars(
+        select(Role)
+        .options(selectinload(Role.permissions), selectinload(Role.users))
+        .order_by(Role.slug)
+    ).all()
+    return [_role_read(role) for role in roles]
 
 
 @router.get(
@@ -229,4 +242,22 @@ def _user_read(user: User) -> UserRead:
         is_active=user.is_active,
         is_superuser=user.is_superuser,
         roles=sorted(role.slug for role in user.roles),
+    )
+
+
+def _role_read(role: Role) -> RoleRead:
+    users = sorted(role.users, key=lambda user: user.email)
+    return RoleRead(
+        slug=role.slug,
+        name=role.name,
+        permissions=sorted(permission.slug for permission in role.permissions),
+        users=[
+            RoleUserRead(
+                id=user.id,
+                email=user.email,
+                display_name=user.display_name,
+                is_active=user.is_active,
+            )
+            for user in users
+        ],
     )

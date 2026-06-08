@@ -55,6 +55,7 @@ export function AppLayout({
   ];
   const settingsPage = { label: "Settings", path: "/settings", icon: SlidersHorizontal, permission: "settings.view" };
   const usersPage = { label: "Users", path: "/users", icon: Users, permission: "core.admin" };
+  const rolesPage = { label: "Roles", path: "/roles", icon: ShieldCheck, permission: "core.admin" };
   const backupsPage = { label: "Backups", path: "/backups", icon: Archive, permission: "core.backup.view" };
   const activeModule = modules.find((module) => module.slug === "core") ?? modules.find((module) => module.enabled);
 
@@ -100,7 +101,7 @@ export function AppLayout({
             <ShieldCheck size={15} />
           </div>
 
-          {[usersPage, backupsPage, settingsPage]
+          {[usersPage, rolesPage, backupsPage, settingsPage]
             .filter((page) => hasPermission(page.permission))
             .map((page) => {
               const Icon = page.icon;

@@ -18,6 +18,7 @@ import { BackupsPage } from "../../pages/BackupsPage";
 import { JobsPage } from "../../pages/JobsPage";
 import { LoginPage } from "../../pages/LoginPage";
 import { NotificationsPage } from "../../pages/NotificationsPage";
+import { RolesPage } from "../../pages/RolesPage";
 import { ServerPage } from "../../pages/ServerPage";
 import { SettingsPage } from "../../pages/SettingsPage";
 import { UsersPage } from "../../pages/UsersPage";
@@ -250,6 +251,19 @@ function renderProtectedPage(
   if (path === "/users") {
     return hasPermission("core.admin") ? (
       <UsersPage />
+    ) : (
+      <DashboardPage
+        agentStatus={agentStatus}
+        canManageModules={hasPermission("modules.manage")}
+        healthStatus={healthStatus}
+        modules={modules}
+        onModuleStateChange={onModuleStateChange}
+      />
+    );
+  }
+  if (path === "/roles") {
+    return hasPermission("core.admin") ? (
+      <RolesPage />
     ) : (
       <DashboardPage
         agentStatus={agentStatus}

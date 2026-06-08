@@ -3,6 +3,15 @@ import { apiRequest } from "./client";
 export interface RoleItem {
   slug: string;
   name: string;
+  permissions: string[];
+  users: RoleUser[];
+}
+
+export interface RoleUser {
+  id: number;
+  email: string;
+  display_name: string;
+  is_active: boolean;
 }
 
 export interface ManagedUser {

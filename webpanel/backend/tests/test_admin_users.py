@@ -137,6 +137,27 @@ def test_admin_can_manage_users_and_audit_events() -> None:
     }.issubset(actions)
 
 
+def test_admin_can_view_roles_with_permissions_and_users() -> None:
+    token = _seed_admin()
+    client = TestClient(app)
+
+    response = client.get("/api/core/admin/roles", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    roles = {role["slug"]: role for role in response.json()}
+    assert set(roles) == {"admin", "operator", "viewer"}
+    assert roles["admin"]["permissions"] == ["core.admin"]
+    assert roles["admin"]["users"] == [
+        {
+            "id": roles["admin"]["users"][0]["id"],
+            "email": "admin@example.com",
+            "display_name": "Admin",
+            "is_active": True,
+        }
+    ]
+    assert roles["operator"]["users"] == []
+
+
 def test_user_management_requires_core_admin_permission() -> None:
     token = _seed_viewer()
     client = TestClient(app)

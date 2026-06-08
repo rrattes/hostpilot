@@ -164,6 +164,75 @@ npm run build
 
 Result: production build completed successfully.
 
+## 2026-06-08 Revalidation
+
+The lab deployment was revalidated after the latest frontend dashboard card
+layout refinement.
+
+Validation target:
+
+- SSH alias: `hostpilot-lab`.
+- Lab IP: `192.168.0.63`.
+- Confirmed SSH user: `root`.
+- Confirmed OS: Ubuntu 26.04 LTS.
+
+Confirmed packages/runtime:
+
+- `python3` 3.14.4 from Ubuntu.
+- Isolated Python 3.13.13 under `/opt/hostpilot/python`.
+- `python3-venv`, `python3-pip`, `nodejs` 22.22.1, `npm` 9.2.0, `nginx`
+  1.28.3, `git`, `curl`, and `uv`.
+
+Deployment validation:
+
+- Current repository archive was deployed to `/opt/hostpilot`.
+- Backend and Agent virtual environments were recreated with isolated Python
+  3.13.13.
+- Backend dependencies installed successfully.
+- Agent dependencies installed successfully.
+- Alembic migrations completed successfully.
+- Frontend dependencies installed with `npm ci`.
+- Frontend production build completed successfully.
+- Existing systemd and Nginx lab templates were installed.
+
+Service and URL validation:
+
+- `hostpilot-core.service`: enabled and active.
+- `hostpilot-agent.service`: enabled and active.
+- Nginx: active.
+- Core bound to `127.0.0.1:8000`.
+- Agent bound to `127.0.0.1:8765`.
+- Nginx exposed the lab UI on `0.0.0.0:8080`.
+- `curl http://127.0.0.1:8765/health` returned Agent `status: ok`.
+- `curl http://127.0.0.1:8000/health` returned Core `status: ok`.
+- `curl http://127.0.0.1:8080/` returned HTTP `200`.
+- `curl http://192.168.0.63:8080/` returned HTTP `200`.
+- `curl http://127.0.0.1:8080/api/agent/status` returned HTTP `401`, which
+  is expected without an auth token and confirms the `/api` proxy reaches Core.
+
+Validation commands passed on the lab host:
+
+```bash
+cd /opt/hostpilot/webpanel/backend
+python -m pytest
+```
+
+Result: `43 passed`.
+
+```bash
+cd /opt/hostpilot/webpanel/agent
+python -m pytest
+```
+
+Result: `6 passed`.
+
+```bash
+cd /opt/hostpilot/webpanel/frontend
+npm run build
+```
+
+Result: production build completed successfully.
+
 ## Current Limits
 
 - No installer script is provided.

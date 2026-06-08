@@ -1,5 +1,6 @@
 import {
   Activity,
+  Archive,
   Bell,
   ClipboardList,
   LayoutDashboard,
@@ -54,6 +55,7 @@ export function AppLayout({
   ];
   const settingsPage = { label: "Settings", path: "/settings", icon: SlidersHorizontal, permission: "settings.view" };
   const usersPage = { label: "Users", path: "/users", icon: Users, permission: "core.admin" };
+  const backupsPage = { label: "Backups", path: "/backups", icon: Archive, permission: "core.backup.view" };
   const activeModule = modules.find((module) => module.slug === "core") ?? modules.find((module) => module.enabled);
 
   return (
@@ -98,7 +100,7 @@ export function AppLayout({
             <ShieldCheck size={15} />
           </div>
 
-          {[usersPage, settingsPage]
+          {[usersPage, backupsPage, settingsPage]
             .filter((page) => hasPermission(page.permission))
             .map((page) => {
               const Icon = page.icon;

@@ -746,6 +746,11 @@ textarea {
   padding: 0 10px;
 }
 
+.count-pill svg {
+  color: #8bdac5;
+  margin-right: 6px;
+}
+
 .data-table-wrap {
   background: #0d141d;
   border: 1px solid #223041;
@@ -829,6 +834,69 @@ textarea {
 .users-table td span {
   color: #8f9dad;
   font-size: 12px;
+}
+
+.backup-scope-note {
+  align-items: flex-start;
+  background: #0d141d;
+  border: 1px solid #223041;
+  border-radius: 8px;
+  color: #a4b0bd;
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.backup-scope-note svg {
+  color: #76d4bc;
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.backup-scope-note strong,
+.backup-scope-note span,
+.backups-table td strong,
+.backups-table td span {
+  display: block;
+}
+
+.backup-scope-note strong,
+.backups-table td strong {
+  color: #eef4f8;
+  font-size: 13px;
+}
+
+.backup-scope-note span,
+.backups-table td span,
+.empty-table-note {
+  color: #8f9dad;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.backup-status.completed {
+  border-color: #2e7d68;
+  color: #76d4bc;
+}
+
+.backup-status.failed {
+  border-color: #7c2c3b;
+  color: #ffc7d0;
+}
+
+.path-code {
+  background: #080d13;
+  border: 1px solid #263546;
+  border-radius: 6px;
+  color: #b9c6d4;
+  display: inline-block;
+  font-size: 12px;
+  max-width: 280px;
+  overflow: hidden;
+  padding: 5px 7px;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
 }
 
 .inline-control {

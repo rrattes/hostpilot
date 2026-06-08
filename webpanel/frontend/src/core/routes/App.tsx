@@ -14,6 +14,7 @@ import type { ModuleDefinition, ModuleState } from "../modules/moduleCatalog";
 import { DashboardPage } from "../../pages/DashboardPage";
 import { AgentPage } from "../../pages/AgentPage";
 import { AuditLogPage } from "../../pages/AuditLogPage";
+import { BackupsPage } from "../../pages/BackupsPage";
 import { JobsPage } from "../../pages/JobsPage";
 import { LoginPage } from "../../pages/LoginPage";
 import { NotificationsPage } from "../../pages/NotificationsPage";
@@ -249,6 +250,19 @@ function renderProtectedPage(
   if (path === "/users") {
     return hasPermission("core.admin") ? (
       <UsersPage />
+    ) : (
+      <DashboardPage
+        agentStatus={agentStatus}
+        canManageModules={hasPermission("modules.manage")}
+        healthStatus={healthStatus}
+        modules={modules}
+        onModuleStateChange={onModuleStateChange}
+      />
+    );
+  }
+  if (path === "/backups") {
+    return hasPermission("core.backup.view") ? (
+      <BackupsPage canCreate={hasPermission("core.backup.create")} />
     ) : (
       <DashboardPage
         agentStatus={agentStatus}

@@ -1,25 +1,25 @@
 # Python
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.ruff_cache/
 .venv/
-venv/
+backend/.venv/
+__pycache__/
+*.pyc
 
-# Node
-node_modules/
-dist/
-.vite/
+# Local databases
+*.db
+backend/*.db
 
-# Local data
-*.sqlite
-*.sqlite3
+# Logs
+.dev/
 *.log
-.env
-.env.*
+
+# Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
 
 # OS/editor
 .DS_Store
 Thumbs.db
-.idea/
 .vscode/
+.idea/
+.git.backup/

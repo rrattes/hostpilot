@@ -47,10 +47,34 @@ execution.
 
 ## Development
 
+### Windows scripts
+
+From the `webpanel/` project root, start the local development environment:
+
+```powershell
+.\scripts\dev.ps1
+```
+
+The script prepares the backend virtual environment, installs backend
+requirements, runs Alembic migrations, installs frontend dependencies when
+needed, starts the backend and frontend, and writes logs to `.dev/logs/`.
+
+Expected URLs:
+
+- Backend: `http://127.0.0.1:8000`
+- API docs: `http://127.0.0.1:8000/docs`
+- Frontend: `http://127.0.0.1:5173`
+
+Run the local validation suite:
+
+```powershell
+.\scripts\test.ps1
+```
+
 ### Backend
 
 ```bash
-cd webpanel/backend
+cd backend
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
@@ -63,7 +87,7 @@ Open `http://127.0.0.1:8000/health` or
 ### Frontend
 
 ```bash
-cd webpanel/frontend
+cd frontend
 npm install
 npm run dev
 ```
@@ -73,7 +97,7 @@ Open `http://127.0.0.1:5173`.
 ### Agent Mock
 
 ```bash
-cd webpanel/agent
+cd agent
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt

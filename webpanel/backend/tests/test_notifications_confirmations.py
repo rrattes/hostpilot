@@ -8,7 +8,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.auth.security import create_access_token
 from app.core.confirmations.models import confirmation_required, is_confirmation_valid
 from app.db.base import Base
-from app.db.models import Notification, Permission, Role, User
+from app.db.models import AuditEvent, Notification, Permission, Role, User
 from app.db.session import get_db
 from app.main import app
 
@@ -97,6 +97,13 @@ def test_mark_as_read_and_unread_count() -> None:
     assert marked.status_code == 200
     assert marked.json()["status"] == "read"
     assert after.json()["unread_count"] == 0
+    with TestingSessionLocal() as db:
+        audit_event = db.scalar(
+            select(AuditEvent).where(AuditEvent.action == "notifications.read")
+        )
+    assert audit_event is not None
+    assert audit_event.target_id == str(notification_id)
+    assert audit_event.outcome == "success"
 
 
 def test_mark_all_as_read() -> None:
@@ -121,6 +128,14 @@ def test_mark_all_as_read() -> None:
 
     assert response.status_code == 200
     assert response.json()["unread_count"] == 0
+    with TestingSessionLocal() as db:
+        audit_event = db.scalar(
+            select(AuditEvent).where(AuditEvent.action == "notifications.read_all")
+        )
+    assert audit_event is not None
+    assert audit_event.target_id == "visible"
+    assert audit_event.outcome == "success"
+    assert '"count": "2"' in audit_event.metadata_json
 
 
 def test_notification_created_from_mock_agent_job() -> None:

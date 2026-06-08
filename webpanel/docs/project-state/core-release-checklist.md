@@ -12,7 +12,7 @@ Status legend: Done, Partial, Pending.
 | User management | Done | Admin UI and backend endpoints exist to list users, create users, enable/disable users, assign roles, and manually reset passwords. |
 | Roles/permissions | Partial | Read-only Roles & Permissions UI exists and shows role metadata defensively. No custom roles, permission editor, or dedicated role-management permission beyond `core.admin`. |
 | RBAC enforcement | Done | Backend permission dependencies protect Core APIs; frontend visibility is convenience only. Admin, operator, viewer roles are seeded. |
-| Audit log | Partial | Audit records cover login, password change, RBAC denial, settings/server edits, module state updates, jobs, agent actions, user management, and backups. No retention enforcement, export, or tamper-resistant storage. |
+| Audit log | Partial | Audit coverage matrix exists at `docs/project-state/audit-coverage-matrix.md`. Core mutation events are covered for current implemented workflows, including notification read/read-all. No retention enforcement, export, or tamper-resistant storage. |
 | Jobs | Partial | Core job records, listing/detail, mock job creation, and agent job records exist. No async worker, external queue, retries, or scheduler. |
 | Notifications | Partial | Notification list/read/read-all, unread count, permissions, and event creation paths exist. No delivery channels, preferences, or retention policy. |
 | Module registry | Done | Registry/state model exists with Core enabled and future module placeholders locked. No real module install/load lifecycle before Web module. |
@@ -30,7 +30,7 @@ Status legend: Done, Partial, Pending.
 - Validate the Python 3.13 lab runtime through the updated installer/check scripts on the Ubuntu 26.04 host.
 - Complete pending Security Gate items: Python dependency scan, Python security lint, ZAP baseline, Nessus/OpenVAS readiness, and formal RBAC/IDOR/BOLA matrix.
 - Add focused frontend regression tests for authenticated routing and Core admin pages.
-- Complete an audit coverage matrix review and close any missing Core workflow events.
+- Address audit release-hardening gaps: retention enforcement, export policy, tamper-resistant storage decision, and optional read-access audit policy.
 - Validate GitHub Actions on the remote branch after reconciliation with `origin/main`.
 - Decide whether Core backup remains filesystem-only or needs a safe download endpoint before Web module work.
 
@@ -50,5 +50,5 @@ Status legend: Done, Partial, Pending.
 1. Re-run `deploy/scripts/install-lab.sh` and `deploy/scripts/check-lab.sh` on the Ubuntu 26.04 lab host to validate the Python 3.13 pin end-to-end.
 2. Add `pip-audit` and Bandit execution to local/CI security validation or document an equivalent scanner.
 3. Add frontend tests for login-protected routing, sidebar utility links, Users, Roles, Backups, and Settings account security.
-4. Build an audit and RBAC/IDOR/BOLA coverage matrix for auth/session, users, roles, settings, server record, jobs, notifications, agent, and backups.
+4. Build the formal RBAC/IDOR/BOLA matrix for auth/session, users, roles, settings, server record, jobs, notifications, agent, and backups.
 5. Reconcile with `origin/main`, push, and validate GitHub Actions CI on GitHub.

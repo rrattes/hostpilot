@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.core.audit.events import record_audit_event
 from app.core.auth.dependencies import get_current_user
 from app.core.rbac.permissions import require_permission
 from app.db.models import Notification, User
@@ -83,6 +84,14 @@ def mark_notification_read(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
 
     notification.status = "read"
+    record_audit_event(
+        db,
+        action="notifications.read",
+        target_type="notification",
+        target_id=str(notification.id),
+        actor_user_id=user.id,
+        outcome="success",
+    )
     db.commit()
     db.refresh(notification)
     return _notification_read(notification)
@@ -98,8 +107,18 @@ def mark_all_notifications_read(
     user: User = Depends(get_current_user),
 ) -> NotificationList:
     notifications = db.scalars(select(Notification).where(_visible_to_user(user))).all()
+    unread_count = sum(1 for notification in notifications if notification.status != "read")
     for notification in notifications:
         notification.status = "read"
+    record_audit_event(
+        db,
+        action="notifications.read_all",
+        target_type="notification",
+        target_id="visible",
+        actor_user_id=user.id,
+        outcome="success",
+        metadata={"count": str(unread_count)},
+    )
     db.commit()
     return list_notifications(db=db, user=user, status_filter=None, limit=20, offset=0)
 

@@ -263,6 +263,8 @@ No real shell/system command execution is present in the agent code. Search chec
 
 ## 6. Security Status
 
+The Core Security Gate document exists at `docs/security/core-security-gate.md` and defines pass/fail checklists for release security validation.
+
 ### Auth / Session Approach
 
 The backend uses JWT bearer tokens. The frontend stores the token in `sessionStorage`.

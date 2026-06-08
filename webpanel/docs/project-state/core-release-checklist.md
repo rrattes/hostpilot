@@ -4,6 +4,8 @@ Date: 2026-06-08
 
 Status legend: Done, Partial, Pending.
 
+Current Web module readiness decision: Ready with Known Gaps. See `docs/project-state/core-readiness-decision.md`.
+
 ## Core Readiness
 
 | Area | Status | Notes |
@@ -25,7 +27,7 @@ Status legend: Done, Partial, Pending.
 | Security gate | Partial | `docs/security/core-security-gate.md` exists and local results are recorded in `docs/project-state/security-gate-results-2026-06-08.md`. Python dependency scan, Python security lint, ZAP, Nessus/OpenVAS, and formal IDOR/BOLA matrix remain pending. |
 | Installer lab | Partial | Repeatable Ubuntu 26.04 lab installer and check scripts exist. The Python runtime decision is resolved for lab use: create backend and Agent venvs from isolated Python 3.13 under `/opt/hostpilot/python`. Python 3.14 migration remains deferred. |
 
-## Remaining Core Blockers Before Web Module
+## Remaining Core Gaps Before Production Release
 
 - Validate the Python 3.13 lab runtime through the updated installer/check scripts on the Ubuntu 26.04 host.
 - Complete pending Security Gate items: Python dependency scan, Python security lint, ZAP baseline, Nessus/OpenVAS readiness, and formal RBAC/IDOR/BOLA matrix.
@@ -47,8 +49,8 @@ Status legend: Done, Partial, Pending.
 
 ## Next 5 Technical Tasks
 
-1. Re-run `deploy/scripts/install-lab.sh` and `deploy/scripts/check-lab.sh` on the Ubuntu 26.04 lab host to validate the Python 3.13 pin end-to-end.
-2. Add `pip-audit` and Bandit execution to local/CI security validation or document an equivalent scanner.
-3. Add frontend tests for login-protected routing, sidebar utility links, Users, Roles, Backups, and Settings account security.
-4. Build the formal RBAC/IDOR/BOLA matrix for auth/session, users, roles, settings, server record, jobs, notifications, agent, and backups.
-5. Reconcile with `origin/main`, push, and validate GitHub Actions CI on GitHub.
+1. Define the Web module contract against Core module registry, RBAC, audit, jobs, notifications, backup boundaries, and Agent allowlist.
+2. Re-run `deploy/scripts/install-lab.sh` and `deploy/scripts/check-lab.sh` on the Ubuntu 26.04 lab host to validate the Python 3.13 pin end-to-end.
+3. Add `pip-audit` and Bandit execution to local/CI security validation or document an equivalent scanner.
+4. Add frontend tests for login-protected routing, sidebar utility links, Users, Roles, Backups, and Settings account security.
+5. Build the formal RBAC/IDOR/BOLA matrix for auth/session, users, roles, settings, server record, jobs, notifications, agent, and backups.

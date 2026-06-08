@@ -41,7 +41,10 @@ textarea {
   background: linear-gradient(180deg, #0d141d, #080d13);
   display: flex;
   flex-direction: column;
+  height: 100vh;
   min-height: 100vh;
+  position: sticky;
+  top: 0;
   padding: 18px 12px;
 }
 
@@ -69,13 +72,8 @@ textarea {
   gap: 5px;
 }
 
-.module-nav-secondary {
-  border-top: 1px solid #1f2a36;
-  margin-top: 16px;
-  padding-top: 16px;
-}
-
-.module-nav-item {
+.module-nav-item,
+.utility-nav-item {
   align-items: center;
   background: transparent;
   border: 1px solid transparent;
@@ -94,7 +92,8 @@ textarea {
     transform 140ms ease;
 }
 
-.module-nav-item.active {
+.module-nav-item.active,
+.utility-nav-item.active {
   background: linear-gradient(180deg, #152231, #111b27);
   border-color: #2a3d51;
   color: #f4f8fb;
@@ -106,11 +105,76 @@ textarea {
   cursor: not-allowed;
 }
 
-.module-nav-item:not(.locked):hover {
+.module-nav-item:not(.locked):hover,
+.utility-nav-item:hover {
   background: #111b26;
   border-color: #29394a;
   color: #dce5ed;
   transform: translateX(1px);
+}
+
+.sidebar-spacer {
+  flex: 1;
+  min-height: 28px;
+}
+
+.sidebar-footer {
+  border-top: 1px solid #1b2632;
+  display: grid;
+  gap: 9px;
+  padding-top: 14px;
+}
+
+.sidebar-section-label {
+  color: #667586;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+  padding: 0 10px;
+  text-transform: uppercase;
+}
+
+.module-context {
+  align-items: center;
+  background:
+    linear-gradient(180deg, rgba(21, 34, 49, 0.92), rgba(12, 19, 27, 0.95)),
+    #0d141d;
+  border: 1px solid #26384a;
+  border-radius: 7px;
+  box-shadow: inset 2px 0 0 #3a9f88;
+  color: #dce5ed;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-height: 58px;
+  padding: 10px 11px;
+}
+
+.module-context strong,
+.module-context span {
+  display: block;
+}
+
+.module-context strong {
+  color: #f4f8fb;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.module-context span {
+  color: #8392a3;
+  font-size: 12px;
+  margin-top: 3px;
+  text-transform: capitalize;
+}
+
+.module-context svg {
+  color: #76d4bc;
+  flex: 0 0 auto;
+}
+
+.utility-nav-item {
+  width: 100%;
 }
 
 .main-area {
@@ -820,7 +884,9 @@ textarea {
   }
 
   .sidebar {
+    height: auto;
     min-height: auto;
+    position: static;
   }
 
   .module-nav {

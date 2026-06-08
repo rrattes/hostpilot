@@ -3,7 +3,6 @@ import {
   Bell,
   ClipboardList,
   LayoutDashboard,
-  Lock,
   LogOut,
   Server,
   RadioTower,
@@ -51,8 +50,9 @@ export function AppLayout({
     { label: "Notifications", path: "/notifications", icon: Bell, permission: "notifications.view" },
     { label: "Audit Log", path: "/audit", icon: ShieldCheck, permission: "audit.view" },
     { label: "Jobs", path: "/jobs", icon: ClipboardList, permission: "jobs.view" },
-    { label: "Settings", path: "/settings", icon: SlidersHorizontal, permission: "settings.view" },
   ];
+  const settingsPage = { label: "Settings", path: "/settings", icon: SlidersHorizontal, permission: "settings.view" };
+  const activeModule = modules.find((module) => module.slug === "core") ?? modules.find((module) => module.enabled);
 
   return (
     <div className="app-shell">
@@ -84,19 +84,29 @@ export function AppLayout({
             })}
         </nav>
 
-        <nav className="module-nav module-nav-secondary" aria-label="Module navigation">
-          {modules.filter((module) => module.enabled).map((module) => (
+        <div className="sidebar-spacer" />
+
+        <div className="sidebar-footer">
+          <span className="sidebar-section-label">Platform context</span>
+          <div className="module-context" aria-label="Active platform module">
+            <div>
+              <strong>{activeModule?.name ?? "Core"}</strong>
+              <span>{activeModule?.state ?? "enabled"} module</span>
+            </div>
+            <ShieldCheck size={15} />
+          </div>
+
+          {hasPermission(settingsPage.permission) ? (
             <button
-              className="module-nav-item active"
-              disabled={module.slug !== "core"}
-              key={module.slug}
+              className={`utility-nav-item ${currentPath === settingsPage.path ? "active" : ""}`}
+              onClick={() => onNavigate(settingsPage.path)}
               type="button"
             >
-              <span>{module.name}</span>
-              {module.slug !== "core" ? <Lock size={14} /> : null}
+              <span>{settingsPage.label}</span>
+              <SlidersHorizontal size={15} />
             </button>
-          ))}
-        </nav>
+          ) : null}
+        </div>
       </aside>
 
       <div className="main-area">

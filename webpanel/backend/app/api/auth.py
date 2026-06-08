@@ -6,7 +6,13 @@ from sqlalchemy.orm import Session
 from app.core.audit.events import record_audit_event
 from app.core.auth.dependencies import get_current_user
 from app.core.auth.rate_limit import clear_login_attempts, is_login_limited, record_failed_login
-from app.core.auth.security import create_access_token, verify_password
+from app.core.auth.security import (
+    create_access_token,
+    get_access_token_expire_minutes,
+    hash_password,
+    validate_password_policy,
+    verify_password,
+)
 from app.core.notifications.events import create_notification
 from app.core.rbac.permissions import get_user_permission_slugs, get_user_role_slugs
 from app.db.models import User
@@ -24,6 +30,16 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    expires_in_minutes: int
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class MessageResponse(BaseModel):
+    message: str
 
 
 class CurrentUserResponse(BaseModel):
@@ -90,7 +106,76 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     )
     db.commit()
 
-    return TokenResponse(access_token=create_access_token(user.id))
+    return TokenResponse(
+        access_token=create_access_token(user.id),
+        expires_in_minutes=get_access_token_expire_minutes(),
+    )
+
+
+@router.post("/auth/password", response_model=MessageResponse)
+def change_password(
+    payload: PasswordChangeRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MessageResponse:
+    if not verify_password(payload.current_password, user.password_hash):
+        record_audit_event(
+            db,
+            action="auth.password_change.failed",
+            target_type="user",
+            target_id=str(user.id),
+            actor_user_id=user.id,
+            outcome="failure",
+            metadata={"reason": "invalid_current_password"},
+        )
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid current password")
+
+    policy_errors = validate_password_policy(payload.new_password)
+    if policy_errors:
+        record_audit_event(
+            db,
+            action="auth.password_change.failed",
+            target_type="user",
+            target_id=str(user.id),
+            actor_user_id=user.id,
+            outcome="failure",
+            metadata={"reason": "password_policy"},
+        )
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=policy_errors)
+
+    user.password_hash = hash_password(payload.new_password)
+    record_audit_event(
+        db,
+        action="auth.password_change.succeeded",
+        target_type="user",
+        target_id=str(user.id),
+        actor_user_id=user.id,
+        outcome="success",
+    )
+    db.commit()
+    return MessageResponse(message="Password changed.")
+
+
+@router.post("/auth/logout", response_model=MessageResponse)
+def logout(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MessageResponse:
+    record_audit_event(
+        db,
+        action="auth.logout.requested",
+        target_type="user",
+        target_id=str(user.id),
+        actor_user_id=user.id,
+        outcome="success",
+        metadata={"mode": "stateless_bearer_token"},
+    )
+    db.commit()
+    return MessageResponse(
+        message="Logout is client-side for stateless bearer tokens; discard the token client-side."
+    )
 
 
 @router.get("/auth/me", response_model=CurrentUserResponse)

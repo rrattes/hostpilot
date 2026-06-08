@@ -10,7 +10,10 @@ from app.api.modules import router as modules_router
 from app.api.notifications import router as notifications_router
 from app.api.servers import router as servers_router
 from app.api.settings import router as settings_router
+from app.core.auth.security import get_secret_key
 
+
+get_secret_key()
 
 app = FastAPI(
     title="HostPilot Core API",

@@ -3,7 +3,7 @@ from getpass import getpass
 
 from sqlalchemy import select
 
-from app.core.auth.security import hash_password
+from app.core.auth.security import hash_password, validate_password_policy
 from app.db.models import Role, User
 from app.db.session import SessionLocal
 
@@ -19,8 +19,9 @@ def main() -> None:
     confirm_password = args.password or getpass("Confirm password: ")
     if password != confirm_password:
         raise SystemExit("Passwords do not match.")
-    if len(password) < 12:
-        raise SystemExit("Password must be at least 12 characters.")
+    password_errors = validate_password_policy(password)
+    if password_errors:
+        raise SystemExit(" ".join(password_errors))
 
     email = args.email.lower()
 

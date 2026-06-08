@@ -1,26 +1,12 @@
-from webpanel_agent.contracts import AgentActionRequest
-from webpanel_agent.actions.mock import run_mock_action
-from webpanel_agent.mock.system_info import get_mock_system_info
+from webpanel_agent.server import agent_health, run_server
 
 
-def health_check() -> dict[str, str]:
-    return {"status": "ok", "mode": "mock"}
+def health_check() -> dict[str, object]:
+    return agent_health()
 
 
 def main() -> None:
-    request = AgentActionRequest(
-        action="mock.health",
-        payload={},
-        requested_by="local-dev",
-        request_id="local-dev",
-    )
-    print(
-        {
-            "health": health_check(),
-            "action": run_mock_action(request),
-            "system": get_mock_system_info(),
-        }
-    )
+    run_server()
 
 
 if __name__ == "__main__":

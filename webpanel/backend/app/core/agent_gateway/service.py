@@ -1,21 +1,52 @@
 import json
+import logging
+from time import perf_counter
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
 
 from app.core.agent_gateway.contracts import AgentActionRequest, AgentActionResponse
+from app.core.agent_gateway.local_client import (
+    LocalAgentTransportError,
+    execute_local_agent_action,
+    get_local_agent_health,
+)
 from app.core.agent_gateway.mock_client import allowed_mock_actions, run_mock_action
 from app.core.audit.events import record_audit_event
+from app.core.auth.security import DEV_TEST_ENVIRONMENTS, get_runtime_environment
 from app.core.notifications.events import create_notification
 from app.db.models import Job, User
 
 
+logger = logging.getLogger(__name__)
+
+
 def get_agent_status() -> dict[str, object]:
-    return {
-        "status": "ok",
-        "mode": "mock",
-        "allowed_actions": allowed_mock_actions(),
-    }
+    try:
+        health = get_local_agent_health()
+        return {
+            "status": str(health.get("status", "ok")),
+            "mode": str(health.get("mode", "local-http")),
+            "allowed_actions": list(health.get("allowed_actions", allowed_mock_actions())),
+        }
+    except LocalAgentTransportError as exc:
+        if _dev_agent_fallback_enabled():
+            logger.warning("Local agent unavailable; using dev mock fallback: %s", exc)
+            return {
+                "status": "ok",
+                "mode": "mock-fallback",
+                "allowed_actions": allowed_mock_actions(),
+            }
+        logger.error("Local agent unavailable and fallback disabled: %s", exc)
+        return {
+            "status": "unavailable",
+            "mode": "local-http",
+            "allowed_actions": allowed_mock_actions(),
+        }
+
+
+def _dev_agent_fallback_enabled() -> bool:
+    return get_runtime_environment() in DEV_TEST_ENVIRONMENTS
 
 
 def execute_mock_agent_action(
@@ -26,6 +57,7 @@ def execute_mock_agent_action(
     user: User,
 ) -> tuple[Job, AgentActionResponse]:
     request_id = str(uuid4())
+    started_at = perf_counter()
     job = Job(
         type="agent_action",
         module="agent",
@@ -53,14 +85,38 @@ def execute_mock_agent_action(
         metadata={"agent_action": action, "request_id": request_id},
     )
 
-    response = run_mock_action(
-        AgentActionRequest(
-            action=action,
-            payload=payload,
-            requested_by=user.email,
-            request_id=request_id,
-        )
+    request = AgentActionRequest(
+        action=action,
+        payload=payload,
+        requested_by=user.email,
+        request_id=request_id,
     )
+    if action not in allowed_mock_actions():
+        response = run_mock_action(request)
+    else:
+        try:
+            response = execute_local_agent_action(request)
+        except LocalAgentTransportError as exc:
+            if _dev_agent_fallback_enabled():
+                logger.warning(
+                    "Local agent unavailable for request_id=%s; using dev mock fallback: %s",
+                    request_id,
+                    exc,
+                )
+                response = run_mock_action(request)
+            else:
+                logger.error(
+                    "Local agent unavailable for request_id=%s and fallback disabled: %s",
+                    request_id,
+                    exc,
+                )
+                response = AgentActionResponse(
+                    success=False,
+                    status="failed",
+                    data={},
+                    error="Local agent service is unavailable.",
+                    duration_ms=int((perf_counter() - started_at) * 1000),
+                )
     job.status = "completed" if response.success else "failed"
     job.result = json.dumps(
         {

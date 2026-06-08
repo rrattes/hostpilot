@@ -1,11 +1,14 @@
 from collections.abc import Generator
 import json
+import logging
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.agent_gateway.contracts import AgentActionRequest, AgentActionResponse
+from app.core.agent_gateway.local_client import LocalAgentTransportError
 from app.core.auth.security import create_access_token
 from app.db.base import Base
 from app.db.models import AuditEvent, Job, Permission, Role, User
@@ -98,6 +101,64 @@ def test_operator_can_execute_mock_action() -> None:
     assert response.status_code == 200
     assert response.json()["success"] is True
     assert response.json()["data"]["status"] == "ok"
+
+
+def test_operator_action_uses_local_agent_transport(monkeypatch) -> None:
+    captured_request: AgentActionRequest | None = None
+
+    def fake_execute_local_agent_action(request: AgentActionRequest) -> AgentActionResponse:
+        nonlocal captured_request
+        captured_request = request
+        return AgentActionResponse(
+            success=True,
+            status="completed",
+            data={"status": "ok", "mode": "local-http"},
+            error=None,
+            duration_ms=5,
+        )
+
+    monkeypatch.setattr(
+        "app.core.agent_gateway.service.execute_local_agent_action",
+        fake_execute_local_agent_action,
+    )
+    token = _token("operator@example.com", ["agent.execute_mock"])
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/agent/actions/mock.health",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"payload": {}},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["mode"] == "local-http"
+    assert captured_request is not None
+    assert captured_request.action == "mock.health"
+    assert captured_request.requested_by == "operator@example.com"
+    assert captured_request.request_id
+
+
+def test_dev_fallback_to_mock_logged_when_local_agent_unavailable(caplog, monkeypatch) -> None:
+    def raise_transport_error(request: AgentActionRequest) -> AgentActionResponse:
+        raise LocalAgentTransportError("offline")
+
+    monkeypatch.setattr(
+        "app.core.agent_gateway.service.execute_local_agent_action",
+        raise_transport_error,
+    )
+    caplog.set_level(logging.WARNING, logger="app.core.agent_gateway.service")
+    token = _token("operator@example.com", ["agent.execute_mock"])
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/agent/actions/mock.health",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"payload": {}},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["mode"] == "mock"
+    assert "using dev mock fallback" in caplog.text
 
 
 def test_job_created_and_completed_with_result() -> None:

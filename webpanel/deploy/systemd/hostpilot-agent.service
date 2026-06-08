@@ -1,6 +1,6 @@
 [Unit]
 Description=HostPilot Local Agent
-Documentation=README.md
+Documentation=file:/opt/hostpilot/webpanel/README.md
 After=network-online.target
 Wants=network-online.target
 

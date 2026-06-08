@@ -115,6 +115,76 @@ Result:
 - Logs were written under `.dev/logs/`.
 - Validation processes were stopped after confirming both development ports.
 
+## Ubuntu Lab Deployment Validation
+
+Validation was performed against the lab server on `2026-06-08`.
+
+- SSH alias: `hostpilot-lab`.
+- Confirmed SSH user: `root`.
+- Confirmed lab IP: `192.168.0.63`.
+- Confirmed OS: Ubuntu 26.04 LTS.
+- Project deployed to `/opt/hostpilot` with project root `/opt/hostpilot/webpanel`.
+- Runtime user/group created: `hostpilot`.
+- Secrets stored outside git under `/etc/hostpilot/core.env`.
+
+Packages and runtimes confirmed on the lab host:
+
+- `python3` 3.14.4.
+- Isolated Python 3.13.13 under `/opt/hostpilot/python`.
+- `python3-venv`, `python3-pip`, `nodejs` 22.22.1, `npm` 9.2.0, `nginx`
+  1.28.3, `git`, `curl`, and `uv` 0.11.19.
+
+The backend dependencies did not install on Ubuntu's default Python 3.14 because
+the pinned `pydantic-core` build does not yet support that interpreter. The lab
+was validated with isolated Python 3.13.13 installed by `uv`; this is a current
+deployment compatibility gap, not a product feature change.
+
+Lab validation commands:
+
+```bash
+cd /opt/hostpilot/webpanel/backend
+python -m pytest
+```
+
+Result: `43 passed`.
+
+```bash
+cd /opt/hostpilot/webpanel/agent
+python -m pytest
+```
+
+Result: `6 passed`.
+
+```bash
+cd /opt/hostpilot/webpanel/frontend
+npm run build
+```
+
+Result: production build completed successfully.
+
+Services created from deploy templates:
+
+- `hostpilot-agent.service`: enabled and active.
+- `hostpilot-core.service`: enabled and active.
+- Nginx lab config installed at `/etc/nginx/conf.d/hostpilot-lab.conf`.
+
+Validated lab bindings and URLs:
+
+- Core: `127.0.0.1:8000`.
+- Agent: `127.0.0.1:8765`.
+- Nginx lab frontend: `http://192.168.0.63:8080/`.
+- Agent health returned `status: ok`.
+- Core health returned `status: ok`.
+- Nginx frontend returned HTTP `200`.
+- Nginx `/api` proxy returned HTTP `401` for an unauthenticated protected
+  endpoint, confirming proxy traffic reached Core.
+
+Lab-only note: root SSH was used for this validation because the target was an
+isolated lab server. This should not be treated as the production deployment
+operating model.
+
 ## Next Recommended Technical Step
 
-Reconcile the local branch with `origin/main`, then add focused frontend automated coverage for the dashboard/sidebar shell before adding new product behavior.
+Resolve the Ubuntu 26.04 Python 3.14 dependency compatibility gap, then
+reconcile the local branch with `origin/main` and add focused frontend automated
+coverage for the dashboard/sidebar shell.

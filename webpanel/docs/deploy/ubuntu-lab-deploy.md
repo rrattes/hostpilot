@@ -13,6 +13,11 @@ and does not perform system changes by itself.
 - Nginx exposes the lab UI on port `8080`.
 - Frontend is built before Nginx serves `frontend/dist`.
 - Secrets are supplied outside git through `/etc/hostpilot/core.env`.
+- Ubuntu 26.04 currently ships Python 3.14. HostPilot was validated in this lab
+  with an isolated Python 3.13 runtime under `/opt/hostpilot/python` because the
+  pinned backend dependencies do not yet install cleanly on Python 3.14.
+- Root SSH was used only for the `192.168.0.63` lab validation. Production
+  deployment should use a least-privilege operating procedure.
 
 ## Prepare Runtime Files
 
@@ -34,7 +39,7 @@ HOSTPILOT_AGENT_TIMEOUT_SECONDS=2
 
 ```bash
 cd /opt/hostpilot/webpanel/backend
-python3 -m venv .venv
+/opt/hostpilot/python/cpython-3.13-linux-x86_64-gnu/bin/python3.13 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
 alembic upgrade head
@@ -46,7 +51,7 @@ The Core service template binds Uvicorn to `127.0.0.1:8000`.
 
 ```bash
 cd /opt/hostpilot/webpanel/agent
-python3 -m venv .venv
+/opt/hostpilot/python/cpython-3.13-linux-x86_64-gnu/bin/python3.13 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
 ```
@@ -92,7 +97,8 @@ Expected local checks on the Ubuntu host:
 ```bash
 curl http://127.0.0.1:8765/health
 curl http://127.0.0.1:8000/health
-curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/
+curl http://127.0.0.1:8080/api/agent/status
 ```
 
 Expected exposed lab URL:
@@ -101,6 +107,63 @@ Expected exposed lab URL:
 http://<lab-host>:8080
 ```
 
+## 2026-06-08 Lab Validation
+
+Validation target:
+
+- SSH alias: `hostpilot-lab`.
+- Lab IP: `192.168.0.63`.
+- Confirmed SSH user: `root`.
+- Confirmed OS: Ubuntu 26.04 LTS.
+
+Installed packages/runtime:
+
+- `python3` 3.14.4 from Ubuntu.
+- Isolated Python 3.13.13 under `/opt/hostpilot/python`.
+- `python3-venv`, `python3-pip`, `nodejs`, `npm`, `nginx`, `git`, and `curl`.
+- `uv` 0.11.19 was used to install the isolated Python 3.13 runtime for lab
+  validation.
+
+Services created from templates:
+
+- `hostpilot-agent.service`: enabled and active.
+- `hostpilot-core.service`: enabled and active.
+- Nginx lab config installed as `/etc/nginx/conf.d/hostpilot-lab.conf`.
+
+Validated bindings and URLs:
+
+- Core: `127.0.0.1:8000`.
+- Agent: `127.0.0.1:8765`.
+- Nginx lab frontend: `http://192.168.0.63:8080/`.
+- Agent health: `curl http://127.0.0.1:8765/health` returned `status: ok`.
+- Core health: `curl http://127.0.0.1:8000/health` returned `status: ok`.
+- Nginx frontend returned HTTP `200`.
+- Nginx `/api` proxy returned HTTP `401` for an unauthenticated protected
+  endpoint, confirming traffic reached Core.
+
+Validation commands passed on the lab host:
+
+```bash
+cd /opt/hostpilot/webpanel/backend
+python -m pytest
+```
+
+Result: `43 passed`.
+
+```bash
+cd /opt/hostpilot/webpanel/agent
+python -m pytest
+```
+
+Result: `6 passed`.
+
+```bash
+cd /opt/hostpilot/webpanel/frontend
+npm run build
+```
+
+Result: production build completed successfully.
+
 ## Current Limits
 
 - No installer script is provided.
@@ -108,3 +171,4 @@ http://<lab-host>:8080
 - No Nginx site management is included.
 - No privileged Agent actions are included.
 - The Agent remains limited to allowlisted mock actions.
+- Python 3.14 support remains a dependency compatibility gap for Ubuntu 26.04.

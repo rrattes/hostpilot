@@ -33,7 +33,7 @@ export function DashboardPage({
   return (
     <div className="dashboard">
       <section className="summary-grid" aria-label="Core summary">
-        <div className="summary-panel">
+        <div className="summary-panel summary-panel-primary">
           <span className="metric-label">Core status</span>
           <strong>{healthStatus?.core_status === "ok" ? "Active" : "Loading"}</strong>
           <p>
@@ -51,22 +51,22 @@ export function DashboardPage({
           <strong>{lockedModules}</strong>
           <p>Future vertical capabilities are visible but unavailable.</p>
         </div>
-        <div className="summary-panel">
+        <div className="summary-panel summary-panel-wide">
           <span className="metric-label">Recent jobs</span>
           <strong>{healthStatus?.recent_jobs_count ?? 0}</strong>
           <p>Mock/dev and Core job records in the last 24 hours.</p>
         </div>
-        <div className="summary-panel">
+        <div className="summary-panel summary-panel-wide">
           <span className="metric-label">Recent audit</span>
           <strong>{healthStatus?.recent_audit_events_count ?? 0}</strong>
           <p>Security and Core activity records in the last 24 hours.</p>
         </div>
-        <div className="summary-panel">
+        <div className="summary-panel summary-panel-wide">
           <span className="metric-label">Local server</span>
           <strong>{healthStatus?.local_server?.name ?? "Not loaded"}</strong>
           <p>{healthStatus?.local_server?.hostname ?? "Waiting for Core status."}</p>
         </div>
-        <div className="summary-panel">
+        <div className="summary-panel summary-panel-wide">
           <span className="metric-label">Agent</span>
           <strong>{agentStatus?.status ?? "Unknown"}</strong>
           <p>

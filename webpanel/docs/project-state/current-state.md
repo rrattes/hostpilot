@@ -320,7 +320,7 @@ No matches were found in backend or agent source.
 - No audit retention enforcement.
 - No notification preferences or delivery channels.
 - No frontend automated tests yet.
-- No CI configuration yet.
+- GitHub Actions CI has been added at `.github/workflows/ci.yml` to run backend tests with migrations, agent tests, and frontend build on push and pull request to `main`.
 
 ## 8. Known Risks
 

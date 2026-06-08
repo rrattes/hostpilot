@@ -104,6 +104,16 @@ class Job(TimestampMixin, Base):
     result: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
+class CoreBackup(TimestampMixin, Base):
+    __tablename__ = "core_backups"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    status: Mapped[str] = mapped_column(String(40), index=True, nullable=False)
+    file_path: Mapped[str] = mapped_column(Text, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
 class AuditEvent(Base):
     __tablename__ = "audit_events"
 

@@ -4,6 +4,7 @@ from app.api.admin import router as admin_router
 from app.api.agent import router as agent_router
 from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
+from app.api.backups import router as backups_router
 from app.api.core_status import router as core_status_router
 from app.api.jobs import router as jobs_router
 from app.api.modules import router as modules_router
@@ -30,6 +31,7 @@ def health() -> dict[str, str]:
 app.include_router(auth_router, prefix="/api/core", tags=["auth"])
 app.include_router(admin_router, prefix="/api/core", tags=["core"])
 app.include_router(audit_router, prefix="/api/core", tags=["audit"])
+app.include_router(backups_router, prefix="/api/core", tags=["backups"])
 app.include_router(core_status_router, prefix="/api/core", tags=["core"])
 app.include_router(jobs_router, prefix="/api/core", tags=["jobs"])
 app.include_router(modules_router, prefix="/api/core", tags=["core"])

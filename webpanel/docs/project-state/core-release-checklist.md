@@ -1,36 +1,54 @@
 # HostPilot Core Release Checklist
 
+Date: 2026-06-08
+
 Status legend: Done, Partial, Pending.
 
 ## Core Readiness
 
 | Area | Status | Notes |
 | --- | --- | --- |
-| Auth hardening | Done | Secret key is mandatory outside dev/test, token lifetime is configurable, password policy and current-user password change exist, logout is documented as stateless bearer behavior. |
-| RBAC | Done | Core permissions and route guards exist for current Core surfaces, including backup create/view. |
-| Audit coverage | Partial | Login, password changes, RBAC denial, settings/server edits, jobs, agent actions, user management, and backups audit key events. Broader audit review is still needed before release. |
-| Jobs | Done | Core job records, listing/detail, mock job creation, and agent job records exist. |
-| Notifications | Done | Notifications list/read/read-all, permissions, and event creation paths exist. |
-| Module registry | Done | Registry/state model exists with locked future module placeholders and protected state updates. |
-| Agent mock/transport | Partial | Local HTTP agent transport, health, request contract validation, timeout, allowlist, and dev fallback exist. No privileged actions or service installer beyond lab templates. |
-| Backup basics | Partial | Manual Core backup create/list exists for SQLite and Core config/state files. No restore, schedule, download UI, cloud, or external backup support. |
-| CI | Done | GitHub Actions workflow validates backend, agent, and frontend under `webpanel/`. |
-| Lab installer | Partial | Repeatable Ubuntu 26.04 lab installer/check scripts exist. Python 3.14 dependency compatibility still requires isolated Python 3.13. |
-| Security gate | Done | Core Security Gate documentation exists with pass/fail checks. |
-| Known non-goals before modules | Done | No website, Nginx, SSL, Docker, KVM, package update, terminal, remote shell, SSO/OAuth/2FA, cloud backup, scheduled backup, or restore automation is in Core. |
+| Auth/session | Partial | Login, current-user lookup, Argon2id hashing, mandatory non-dev secret, configurable token lifetime, password policy, current-user password change, and client-side stateless logout behavior exist. No refresh tokens, server-side revocation, 2FA, SSO, or password reset. |
+| User management | Done | Admin UI and backend endpoints exist to list users, create users, enable/disable users, assign roles, and manually reset passwords. |
+| Roles/permissions | Partial | Read-only Roles & Permissions UI exists and shows role metadata defensively. No custom roles, permission editor, or dedicated role-management permission beyond `core.admin`. |
+| RBAC enforcement | Done | Backend permission dependencies protect Core APIs; frontend visibility is convenience only. Admin, operator, viewer roles are seeded. |
+| Audit log | Partial | Audit records cover login, password change, RBAC denial, settings/server edits, module state updates, jobs, agent actions, user management, and backups. No retention enforcement, export, or tamper-resistant storage. |
+| Jobs | Partial | Core job records, listing/detail, mock job creation, and agent job records exist. No async worker, external queue, retries, or scheduler. |
+| Notifications | Partial | Notification list/read/read-all, unread count, permissions, and event creation paths exist. No delivery channels, preferences, or retention policy. |
+| Module registry | Done | Registry/state model exists with Core enabled and future module placeholders locked. No real module install/load lifecycle before Web module. |
+| Settings/server record | Done | Settings and local server display record APIs/UI exist with RBAC and audit coverage for edits. |
+| Agent mock/transport | Partial | Local HTTP agent transport, health, request/response validation, timeout, request_id handling, allowlist enforcement, and dev fallback exist. No privileged or real OS actions. |
+| Core backup | Partial | Manual Core backup API/UI creates and lists local SQLite/Core config backup metadata and artifacts. No restore, download endpoint, schedule, cloud backup, website backup, Nginx backup, or SSL backup. |
+| Dev runner | Done | Windows `scripts/dev.ps1` and `scripts/test.ps1` exist under `webpanel/` for local dev/test flow. |
+| CI | Done | GitHub Actions workflow exists at `.github/workflows/ci.yml` for backend tests/migrations, agent tests, and frontend build. |
+| Ubuntu lab deploy | Partial | Ubuntu lab docs and systemd/Nginx templates exist and have been lab-validated. It remains lab-only, not production deployment guidance. |
+| Security gate | Done | `docs/security/core-security-gate.md` exists with pass/fail security validation checklists. |
+| Installer lab | Partial | Repeatable Ubuntu 26.04 lab installer and check scripts exist. Python 3.14 dependency compatibility remains a lab/runtime decision risk. |
 
-## Pending Core Items
+## Remaining Core Blockers Before Web Module
 
-- Complete an audit coverage review and close any missing audit events for Core workflows.
-- Resolve Ubuntu 26.04 Python 3.14 dependency compatibility or formally document Python 3.13 as the supported Core runtime.
-- Add focused frontend automated coverage for shell navigation and Core admin pages.
-- Reconcile the local branch with `origin/main` and validate CI on GitHub.
-- Decide whether Core backup needs a download endpoint or keep it explicitly filesystem-only before module work.
+- Resolve the Ubuntu 26.04 Python runtime decision: support Python 3.14 dependencies or formally pin/document isolated Python 3.13 for the lab.
+- Run and record the Core Security Gate results, not just the checklist document.
+- Add focused frontend regression tests for authenticated routing and Core admin pages.
+- Complete an audit coverage matrix review and close any missing Core workflow events.
+- Validate GitHub Actions on the remote branch after reconciliation with `origin/main`.
+- Decide whether Core backup remains filesystem-only or needs a safe download endpoint before Web module work.
+
+## Non-Goals Before Web Module
+
+- No website hosting or website backup features.
+- No Nginx site management beyond lab deploy templates.
+- No SSL certificate automation.
+- No Docker, KVM, package manager, firewall, terminal, remote shell, SSH, RDP, or VNC features.
+- No privileged Agent actions or arbitrary command execution.
+- No OAuth, SSO, 2FA, self-registration, or password reset email.
+- No scheduled, cloud, restore, website, Nginx, or SSL backup automation.
+- No custom role creation or permission editor.
 
 ## Next 5 Technical Tasks
 
-1. Resolve the Ubuntu 26.04 Python runtime decision: update dependencies for Python 3.14 or pin/document Python 3.13 as supported.
-2. Run the Core Security Gate and record results in `docs/project-state/current-state.md`.
-3. Add frontend tests for authenticated routing, sidebar utility links, Users, and Backups pages.
-4. Perform an audit-event matrix review for auth, RBAC, settings, users, jobs, agent, notifications, and backups.
-5. Reconcile with `origin/main`, push the current branch, and validate GitHub Actions CI.
+1. Resolve and document the Ubuntu 26.04 Python runtime path for lab installs.
+2. Run the Core Security Gate and record pass/fail results in project-state docs.
+3. Add frontend tests for login-protected routing, sidebar utility links, Users, Roles, Backups, and Settings account security.
+4. Build an audit coverage matrix for auth/session, RBAC, users, roles, settings, server record, jobs, notifications, agent, and backups.
+5. Reconcile with `origin/main`, push, and validate GitHub Actions CI on GitHub.

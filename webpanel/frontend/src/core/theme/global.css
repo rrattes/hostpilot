@@ -1171,6 +1171,34 @@ textarea {
   font-size: 13px;
 }
 
+.dry-run-result.failed {
+  border-color: #7c2c3b;
+}
+
+.web-apply-warning {
+  background: #281f12;
+  border: 1px solid #856a2a;
+  border-radius: 8px;
+  color: #f2d58b;
+  display: grid;
+  gap: 5px;
+  padding: 11px;
+}
+
+.web-apply-warning strong,
+.web-apply-warning span {
+  display: block;
+}
+
+.web-apply-warning strong {
+  font-size: 13px;
+}
+
+.web-apply-warning span {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .rbac-readonly-note {
   align-items: flex-start;
   background: #0d141d;

@@ -1,4 +1,4 @@
-ALLOWED_ACTIONS = {"mock.health", "mock.system_info"}
+ALLOWED_ACTIONS = {"mock.health", "mock.system_info", "web.nginx.apply_site_config"}
 
 
 def allowed_actions() -> list[str]:

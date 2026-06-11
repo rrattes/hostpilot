@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.agent_gateway.service import execute_mock_agent_action
 from app.core.audit.events import record_audit_event
 from app.core.auth.dependencies import get_current_user
 from app.core.rbac.permissions import require_permission
@@ -122,6 +123,19 @@ class WebSiteDryRunRead(BaseModel):
     expected_result: str
     executed: bool = False
     wrote_files: bool = False
+
+
+class WebSiteApplyRequest(BaseModel):
+    confirmation_phrase: str = Field(min_length=1)
+
+
+class WebSiteApplyRead(BaseModel):
+    site: WebSiteRead
+    job_id: int
+    success: bool
+    status: str
+    result: dict[str, object]
+    error: str | None
 
 
 WEB_SECTIONS = [
@@ -527,6 +541,74 @@ def dry_run_web_site_nginx_apply(
     return result
 
 
+@router.post(
+    "/web/sites/{site_id}/nginx-apply",
+    response_model=WebSiteApplyRead,
+    dependencies=[Depends(require_permission("web.sites.manage"))],
+)
+def apply_web_site_nginx_config(
+    site_id: int,
+    payload: WebSiteApplyRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> WebSiteApplyRead:
+    site = _site_or_404(db, site_id)
+    if site.provisioning_status != "ready_to_apply":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Site must be ready_to_apply before applying Nginx config.",
+        )
+    plan = _nginx_apply_plan(site)
+    if payload.confirmation_phrase.strip() != plan.confirmation_phrase:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Confirmation phrase does not match.",
+        )
+
+    agent_payload = _agent_apply_payload(site)
+    record_audit_event(
+        db,
+        action="web.site.nginx_apply.requested",
+        target_type="web_site",
+        target_id=str(site.id),
+        outcome="success",
+        actor_user_id=user.id,
+        metadata={"domain": site.domain, "target_config_path": agent_payload["target_config_path"]},
+    )
+    job, response = execute_mock_agent_action(
+        db,
+        action="web.nginx.apply_site_config",
+        payload=agent_payload,
+        user=user,
+    )
+    site.status = "applied" if response.success else "error"
+    site.provisioning_status = "ready_to_apply" if response.success else "error"
+    record_audit_event(
+        db,
+        action="web.site.nginx_apply.completed",
+        target_type="web_site",
+        target_id=str(site.id),
+        outcome="success" if response.success else "failure",
+        actor_user_id=user.id,
+        metadata={
+            "domain": site.domain,
+            "job_id": str(job.id),
+            "agent_status": response.status,
+        },
+    )
+    db.commit()
+    db.refresh(site)
+    db.refresh(job)
+    return WebSiteApplyRead(
+        site=_site_read(site),
+        job_id=job.id,
+        success=response.success,
+        status=response.status,
+        result=response.data,
+        error=response.error,
+    )
+
+
 def _site_or_404(db: Session, site_id: int) -> WebSite:
     site = db.get(WebSite, site_id)
     if site is None:
@@ -723,7 +805,7 @@ server {{
 
 def _nginx_apply_plan(site: WebSite) -> WebSiteNginxApplyPlanRead:
     config_filename = f"{site.domain}.conf"
-    target_config_path = f"/etc/nginx/sites-available/{config_filename}"
+    target_config_path = f"/etc/nginx/sites-available/hostpilot/{config_filename}"
     return WebSiteNginxApplyPlanRead(
         site_id=site.id,
         domain=site.domain,
@@ -732,6 +814,7 @@ def _nginx_apply_plan(site: WebSite) -> WebSiteNginxApplyPlanRead:
         required_directories=[
             site.root_path,
             "/etc/nginx/sites-available",
+            "/etc/nginx/sites-available/hostpilot",
             "/etc/nginx/sites-enabled",
             "/var/log/nginx/hostpilot",
         ],
@@ -763,6 +846,18 @@ def _nginx_dry_run(site: WebSite) -> WebSiteDryRunRead:
         executed=False,
         wrote_files=False,
     )
+
+
+def _agent_apply_payload(site: WebSite) -> dict[str, object]:
+    plan = _nginx_apply_plan(site)
+    return {
+        "domain": site.domain,
+        "webroot_path": site.root_path,
+        "target_config_path": plan.target_config_path,
+        "config_content": _nginx_preview(site),
+        "allowed_webroot_base": DEFAULT_WEB_SITES_BASE_PATH,
+        "allowed_nginx_base": "/etc/nginx/sites-available/hostpilot",
+    }
 
 
 def _php_fpm_target(php_runtime: str) -> str:

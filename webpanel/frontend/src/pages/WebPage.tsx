@@ -13,6 +13,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import {
+  applyWebSiteNginxConfig,
   createWebSite,
   disableWebSite,
   getWebSiteNginxApplyPlan,
@@ -25,6 +26,7 @@ import {
   type ProvisioningStatus,
   type WebSectionStatus,
   type WebSite,
+  type WebSiteApplyResult,
   type WebSiteDryRunResult,
   type WebSiteNginxApplyPlan,
   type WebSiteNginxPreview,
@@ -65,6 +67,8 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
   const [applyPlan, setApplyPlan] = useState<WebSiteNginxApplyPlan | null>(null);
   const [dryRunPhrase, setDryRunPhrase] = useState("");
   const [dryRunResult, setDryRunResult] = useState<WebSiteDryRunResult | null>(null);
+  const [applyPhrase, setApplyPhrase] = useState("");
+  const [applyResult, setApplyResult] = useState<WebSiteApplyResult | null>(null);
   const sections = useMemo(() => status?.sections ?? fallbackSections(), [status]);
 
   useEffect(() => {
@@ -209,6 +213,8 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
       setApplyPlan(await getWebSiteNginxApplyPlan(token, siteId));
       setDryRunPhrase("");
       setDryRunResult(null);
+      setApplyPhrase("");
+      setApplyResult(null);
       setSiteError(null);
     } catch (planError) {
       setSiteError(
@@ -235,6 +241,29 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
           : "Unable to run Nginx dry-run.",
       );
       setDryRunResult(null);
+    }
+  }
+
+  async function handleApplyNginxConfig() {
+    if (!token || !applyPlan || !canManageSites) return;
+
+    try {
+      const result = await applyWebSiteNginxConfig(token, applyPlan.site_id, applyPhrase);
+      setApplyResult(result);
+      setSites((current) => current.map((site) => (site.id === result.site.id ? result.site : site)));
+      setSiteError(null);
+      setSiteMessage(
+        result.success
+          ? `${result.site.domain} applied through controlled Agent job #${result.job_id}.`
+          : `${result.site.domain} apply failed through Agent job #${result.job_id}.`,
+      );
+    } catch (applyError) {
+      setSiteError(
+        applyError instanceof ApiError
+          ? applyError.message
+          : "Unable to apply Nginx config.",
+      );
+      setApplyResult(null);
     }
   }
 
@@ -541,6 +570,30 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
               Run Dry-Run
             </button>
             {dryRunResult ? <DryRunResultPanel result={dryRunResult} /> : null}
+            <div className="web-apply-warning">
+              <strong>Controlled Agent apply</strong>
+              <span>
+                This action asks the local Agent to create only the approved webroot, write one
+                HostPilot Nginx config, run nginx -t, and reload Nginx only if validation passes.
+              </span>
+            </div>
+            <label className="dry-run-confirmation">
+              <span>Apply confirmation phrase</span>
+              <input
+                onChange={(event) => setApplyPhrase(event.target.value)}
+                placeholder={applyPlan.confirmation_phrase}
+                value={applyPhrase}
+              />
+            </label>
+            <button
+              className="primary-button compact"
+              disabled={!canManageSites || applyPhrase !== applyPlan.confirmation_phrase}
+              onClick={handleApplyNginxConfig}
+              type="button"
+            >
+              Apply Nginx Config
+            </button>
+            {applyResult ? <ApplyResultPanel result={applyResult} /> : null}
             <div className="modal-actions">
               <button
                 className="icon-text-button"
@@ -548,6 +601,8 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                   setApplyPlan(null);
                   setDryRunPhrase("");
                   setDryRunResult(null);
+                  setApplyPhrase("");
+                  setApplyResult(null);
                 }}
                 type="button"
               >
@@ -558,6 +613,23 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
         </div>
       ) : null}
     </section>
+  );
+}
+
+function ApplyResultPanel({ result }: { result: WebSiteApplyResult }) {
+  return (
+    <div className={`dry-run-result ${result.success ? "" : "failed"}`}>
+      <strong>Agent job #{result.job_id}</strong>
+      <span>{result.success ? "Controlled apply completed." : result.error ?? "Controlled apply failed."}</span>
+      <div className="apply-plan-section">
+        <strong>Agent status</strong>
+        <code className="path-code">{result.status}</code>
+        <code className="path-code">{result.site.status}</code>
+      </div>
+      <pre className="config-preview-block">
+        <code>{JSON.stringify(result.result, null, 2)}</code>
+      </pre>
+    </div>
   );
 }
 

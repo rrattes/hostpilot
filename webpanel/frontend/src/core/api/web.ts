@@ -88,6 +88,15 @@ export interface WebSiteDryRunResult {
   wrote_files: boolean;
 }
 
+export interface WebSiteApplyResult {
+  site: WebSite;
+  job_id: number;
+  success: boolean;
+  status: string;
+  result: Record<string, unknown>;
+  error: string | null;
+}
+
 export function getWebStatus(token: string) {
   return apiRequest<WebStatus>("/api/core/web/status", { token });
 }
@@ -167,6 +176,18 @@ export function runWebSiteNginxDryRun(
   confirmationPhrase: string,
 ) {
   return apiRequest<WebSiteDryRunResult>(`/api/core/web/sites/${siteId}/nginx-dry-run`, {
+    method: "POST",
+    token,
+    body: { confirmation_phrase: confirmationPhrase },
+  });
+}
+
+export function applyWebSiteNginxConfig(
+  token: string,
+  siteId: number,
+  confirmationPhrase: string,
+) {
+  return apiRequest<WebSiteApplyResult>(`/api/core/web/sites/${siteId}/nginx-apply`, {
     method: "POST",
     token,
     body: { confirmation_phrase: confirmationPhrase },

@@ -13,7 +13,11 @@ from webpanel_agent.server import create_server
 def test_health_check() -> None:
     assert health_check()["status"] == "ok"
     assert health_check()["mode"] == "local-http"
-    assert health_check()["allowed_actions"] == ["mock.health", "mock.system_info"]
+    assert health_check()["allowed_actions"] == [
+        "mock.health",
+        "mock.system_info",
+        "web.nginx.apply_site_config",
+    ]
 
 
 def test_mock_system_info() -> None:

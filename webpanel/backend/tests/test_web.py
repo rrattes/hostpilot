@@ -5,6 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.agent_gateway.contracts import AgentActionResponse
 from app.core.auth.security import create_access_token
 from app.db.base import Base
 from app.db.models import AuditEvent, Module, Permission, Role, User, WebSite
@@ -537,18 +538,19 @@ def test_nginx_apply_plan_is_preview_only_and_audited() -> None:
     payload = response.json()
     assert payload["site_id"] == created["id"]
     assert payload["domain"] == "plan.example.com"
-    assert payload["target_config_path"] == "/etc/nginx/sites-available/plan.example.com.conf"
+    assert payload["target_config_path"] == "/etc/nginx/sites-available/hostpilot/plan.example.com.conf"
     assert payload["webroot_path"] == "/var/www/hostpilot-sites/plan.example.com"
     assert payload["config_filename"] == "plan.example.com.conf"
     assert payload["required_directories"] == [
         "/var/www/hostpilot-sites/plan.example.com",
         "/etc/nginx/sites-available",
+        "/etc/nginx/sites-available/hostpilot",
         "/etc/nginx/sites-enabled",
         "/var/log/nginx/hostpilot",
     ]
     assert payload["validation_commands"] == [
         "nginx -t",
-        "test -f /etc/nginx/sites-available/plan.example.com.conf",
+        "test -f /etc/nginx/sites-available/hostpilot/plan.example.com.conf",
         "test -d /var/www/hostpilot-sites/plan.example.com",
     ]
     assert payload["service_reload_command"] == "systemctl reload nginx"
@@ -653,11 +655,12 @@ def test_nginx_dry_run_simulates_apply_without_changes_and_audits() -> None:
     assert payload["site_id"] == created["id"]
     assert payload["domain"] == "dry.example.com"
     assert "server_name dry.example.com;" in payload["config_content"]
-    assert payload["target_config_path"] == "/etc/nginx/sites-available/dry.example.com.conf"
+    assert payload["target_config_path"] == "/etc/nginx/sites-available/hostpilot/dry.example.com.conf"
     assert payload["webroot_path"] == "/var/www/hostpilot-sites/dry.example.com"
     assert payload["directory_checks"] == [
         "would ensure directory exists: /var/www/hostpilot-sites/dry.example.com",
         "would ensure directory exists: /etc/nginx/sites-available",
+        "would ensure directory exists: /etc/nginx/sites-available/hostpilot",
         "would ensure directory exists: /etc/nginx/sites-enabled",
         "would ensure directory exists: /var/log/nginx/hostpilot",
     ]
@@ -683,3 +686,155 @@ def test_nginx_dry_run_simulates_apply_without_changes_and_audits() -> None:
         "web.site.nginx_dry_run.requested",
         "web.site.nginx_dry_run.completed",
     ]
+
+
+def test_controlled_nginx_apply_calls_agent_and_updates_site(monkeypatch) -> None:
+    captured_payload: dict[str, object] | None = None
+
+    def fake_execute_agent_action(db: Session, *, action: str, payload: dict[str, object], user: User):
+        nonlocal captured_payload
+        captured_payload = payload
+        from app.db.models import Job
+
+        job = Job(
+            type="agent_action",
+            module="agent",
+            action=action,
+            status="completed",
+            payload="{}",
+            result="{}",
+        )
+        db.add(job)
+        db.flush()
+        return job, AgentActionResponse(
+            success=True,
+            status="applied",
+            data={"applied": True, "reloaded": True},
+            error=None,
+            duration_ms=3,
+        )
+
+    monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = _ready_site(client, token, "apply-agent.example.com")
+
+    response = client.post(
+        f"/api/core/web/sites/{created['id']}/nginx-apply",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"confirmation_phrase": "APPLY NGINX PLAN apply-agent.example.com"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["site"]["status"] == "applied"
+    assert payload["site"]["provisioning_status"] == "ready_to_apply"
+    assert payload["result"]["reloaded"] is True
+    assert captured_payload is not None
+    assert captured_payload["target_config_path"] == (
+        "/etc/nginx/sites-available/hostpilot/apply-agent.example.com.conf"
+    )
+    assert captured_payload["allowed_nginx_base"] == "/etc/nginx/sites-available/hostpilot"
+
+
+def test_controlled_nginx_apply_marks_error_on_agent_failure(monkeypatch) -> None:
+    def fake_execute_agent_action(db: Session, *, action: str, payload: dict[str, object], user: User):
+        from app.db.models import Job
+
+        job = Job(
+            type="agent_action",
+            module="agent",
+            action=action,
+            status="failed",
+            payload="{}",
+            result="{}",
+        )
+        db.add(job)
+        db.flush()
+        return job, AgentActionResponse(
+            success=False,
+            status="validation_failed",
+            data={"rolled_back": True, "reloaded": False},
+            error="validation_failed",
+            duration_ms=4,
+        )
+
+    monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = _ready_site(client, token, "apply-fail.example.com")
+
+    response = client.post(
+        f"/api/core/web/sites/{created['id']}/nginx-apply",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"confirmation_phrase": "APPLY NGINX PLAN apply-fail.example.com"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["success"] is False
+    assert response.json()["site"]["status"] == "error"
+    assert response.json()["site"]["provisioning_status"] == "error"
+    assert response.json()["result"]["rolled_back"] is True
+
+
+def test_controlled_nginx_apply_requires_confirmation_phrase() -> None:
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = _ready_site(client, token, "apply-confirm.example.com")
+
+    response = client.post(
+        f"/api/core/web/sites/{created['id']}/nginx-apply",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"confirmation_phrase": "wrong phrase"},
+    )
+
+    assert response.status_code == 400
+
+
+def test_controlled_nginx_apply_requires_manage_permission() -> None:
+    manager_token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = _ready_site(client, manager_token, "apply-rbac.example.com")
+    with TestingSessionLocal() as db:
+        permission = db.query(Permission).filter(Permission.slug == "web.sites.view").one()
+        role = Role(slug="viewer-rbac", name="Viewer RBAC", permissions=[permission])
+        user = User(
+            email="viewer-rbac@example.com",
+            display_name="Viewer RBAC",
+            password_hash="not-used",
+            roles=[role],
+        )
+        db.add(user)
+        db.commit()
+        viewer_token = create_access_token(user.id)
+
+    response = client.post(
+        f"/api/core/web/sites/{created['id']}/nginx-apply",
+        headers={"Authorization": f"Bearer {viewer_token}"},
+        json={"confirmation_phrase": "APPLY NGINX PLAN apply-rbac.example.com"},
+    )
+
+    assert response.status_code == 403
+
+
+def _ready_site(client: TestClient, token: str, domain: str) -> dict[str, object]:
+    created = client.post(
+        "/api/core/web/sites",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": domain,
+            "root_path": f"/var/www/hostpilot-sites/{domain}",
+            "php_runtime": "php-8.3",
+            "ssl_enabled": False,
+        },
+    ).json()
+    client.get(
+        f"/api/core/web/sites/{created['id']}/nginx-preview",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    client.patch(
+        f"/api/core/web/sites/{created['id']}/mark-ready",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    return created

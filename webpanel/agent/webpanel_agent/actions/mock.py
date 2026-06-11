@@ -1,6 +1,7 @@
 from time import perf_counter
 from typing import Any
 
+from webpanel_agent.actions.nginx import apply_site_config
 from webpanel_agent.contracts import AgentActionRequest, AgentActionResponse
 from webpanel_agent.mock.system_info import get_mock_system_info
 from webpanel_agent.policies.allowlist import is_action_allowed
@@ -17,6 +18,19 @@ def run_mock_action(request: AgentActionRequest) -> AgentActionResponse:
 
     if request.action == "mock.system_info":
         return _response(True, "completed", dict(get_mock_system_info()), None, started_at)
+
+    if request.action == "web.nginx.apply_site_config":
+        try:
+            result = apply_site_config(request.payload)
+        except ValueError as exc:
+            return _response(False, "rejected", {}, str(exc), started_at)
+        return _response(
+            bool(result.get("applied")),
+            str(result.get("status", "failed")),
+            result,
+            None if result.get("applied") else str(result.get("status", "Apply failed.")),
+            started_at,
+        )
 
     return _response(False, "rejected", {}, "Unknown action.", started_at)
 

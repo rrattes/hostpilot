@@ -22,6 +22,7 @@ import { RolesPage } from "../../pages/RolesPage";
 import { ServerPage } from "../../pages/ServerPage";
 import { SettingsPage } from "../../pages/SettingsPage";
 import { UsersPage } from "../../pages/UsersPage";
+import { WebPage } from "../../pages/WebPage";
 
 export function App() {
   return (
@@ -199,6 +200,25 @@ function renderProtectedPage(
   if (path === "/agent") {
     return hasPermission("agent.view") ? (
       <AgentPage canExecuteMock={hasPermission("agent.execute_mock")} />
+    ) : (
+      <DashboardPage
+        agentStatus={agentStatus}
+        canManageModules={hasPermission("modules.manage")}
+        healthStatus={healthStatus}
+        modules={modules}
+        onModuleStateChange={onModuleStateChange}
+      />
+    );
+  }
+  if (path === "/web") {
+    const webModule = modules.find((module) => module.slug === "web");
+    const canOpenWeb =
+      hasPermission("web.view") &&
+      webModule !== undefined &&
+      webModule.state !== "locked";
+
+    return canOpenWeb ? (
+      <WebPage moduleState={webModule.state} />
     ) : (
       <DashboardPage
         agentStatus={agentStatus}

@@ -11,6 +11,7 @@ from app.api.modules import router as modules_router
 from app.api.notifications import router as notifications_router
 from app.api.servers import router as servers_router
 from app.api.settings import router as settings_router
+from app.api.web import router as web_router
 from app.core.auth.security import get_secret_key
 
 
@@ -38,4 +39,5 @@ app.include_router(modules_router, prefix="/api/core", tags=["core"])
 app.include_router(notifications_router, prefix="/api/core", tags=["notifications"])
 app.include_router(servers_router, prefix="/api/core", tags=["servers"])
 app.include_router(settings_router, prefix="/api/core", tags=["settings"])
+app.include_router(web_router, prefix="/api/core", tags=["web"])
 app.include_router(agent_router, prefix="/api/agent", tags=["agent"])

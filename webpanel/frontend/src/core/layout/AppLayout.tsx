@@ -3,6 +3,7 @@ import {
   Archive,
   Bell,
   ClipboardList,
+  Globe2,
   LayoutDashboard,
   LogOut,
   Server,
@@ -57,6 +58,14 @@ export function AppLayout({
   const usersPage = { label: "Users", path: "/users", icon: Users, permission: "core.admin" };
   const rolesPage = { label: "Roles", path: "/roles", icon: ShieldCheck, permission: "core.admin" };
   const backupsPage = { label: "Backups", path: "/backups", icon: Archive, permission: "core.backup.view" };
+  const webModule = modules.find((module) => module.slug === "web");
+  const webPage = {
+    label: "Web",
+    path: "/web",
+    icon: Globe2,
+    permission: "web.view",
+    visible: webModule !== undefined && webModule.state !== "locked",
+  };
   const activeModule = modules.find((module) => module.slug === "core") ?? modules.find((module) => module.enabled);
 
   return (
@@ -88,6 +97,19 @@ export function AppLayout({
               );
             })}
         </nav>
+
+        {hasPermission(webPage.permission) && webPage.visible ? (
+          <nav className="module-nav module-nav-secondary" aria-label="Web navigation">
+            <button
+              className={`module-nav-item ${currentPath === webPage.path ? "active" : ""}`}
+              onClick={() => onNavigate(webPage.path)}
+              type="button"
+            >
+              <span>{webPage.label}</span>
+              <Globe2 size={15} />
+            </button>
+          </nav>
+        ) : null}
 
         <div className="sidebar-spacer" />
 

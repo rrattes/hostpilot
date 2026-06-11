@@ -72,6 +72,12 @@ textarea {
   gap: 5px;
 }
 
+.module-nav-secondary {
+  border-top: 1px solid #1b2632;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
 .module-nav-item,
 .utility-nav-item {
   align-items: center;
@@ -849,6 +855,92 @@ textarea {
   padding: 12px 14px;
 }
 
+.web-scope-note {
+  align-items: flex-start;
+  background: #0d141d;
+  border: 1px solid #223041;
+  border-radius: 8px;
+  color: #a4b0bd;
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.web-scope-note svg {
+  color: #76d4bc;
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.web-scope-note strong,
+.web-scope-note span {
+  display: block;
+}
+
+.web-scope-note strong {
+  color: #eef4f8;
+  font-size: 13px;
+}
+
+.web-scope-note span {
+  color: #8f9dad;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.web-status-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1.2fr 1fr;
+}
+
+.web-section-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.web-section-card {
+  background:
+    linear-gradient(180deg, rgba(18, 28, 39, 0.92), rgba(10, 17, 24, 0.96)),
+    #0b1219;
+  border: 1px solid #223041;
+  border-radius: 8px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.025) inset,
+    0 14px 34px rgba(0, 0, 0, 0.16);
+  display: grid;
+  gap: 10px;
+  min-height: 218px;
+  padding: 14px;
+}
+
+.web-section-card-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.web-section-card h3 {
+  color: #eef4f8;
+  font-size: 15px;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.web-section-card p {
+  color: #98a6b5;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.web-section-card .icon-text-button {
+  align-self: end;
+  min-width: 0;
+  text-align: left;
+}
+
 .rbac-readonly-note {
   align-items: flex-start;
   background: #0d141d;
@@ -1347,8 +1439,13 @@ textarea {
   .summary-grid,
   .summary-grid-runtime,
   .summary-grid-activity,
+  .web-section-grid,
   .roles-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .web-status-grid {
+    grid-template-columns: 1fr;
   }
 
   .summary-panel-primary {
@@ -1375,6 +1472,7 @@ textarea {
   .summary-grid,
   .summary-grid-runtime,
   .summary-grid-activity,
+  .web-section-grid,
   .roles-grid {
     grid-template-columns: 1fr;
   }

@@ -33,6 +33,32 @@ None found in the current local review.
 | Frontend tests | Not present: no frontend `test` script is defined. |
 | Frontend build | Pass: production build completed. |
 
+## 2026-06-11 State Refresh
+
+The readiness decision remains: Ready with Known Gaps for starting the Web
+module.
+
+The local Git state needs cleanup before this can be treated as a clean release
+candidate:
+
+- Local `main` is ahead of and behind `origin/main`.
+- Some tracked files are currently missing from the working tree and must be
+  restored or intentionally removed in a dedicated cleanup commit.
+- The untracked `webpanel/.git.backup/` directory remains local backup data and
+  should not be published as source.
+
+These Git hygiene issues do not change the Core architecture decision, but they
+do block treating the current checkout as release-clean.
+
+Current refresh validation:
+
+- Backend pytest: pass, `48 passed`, using workspace-local temp variables
+  because the default Windows pytest temp path was not accessible.
+- Agent pytest: not valid in this checkout because pytest collected `0` tests
+  after tracked agent files were found missing from the working tree.
+- Frontend tests: no configured test script.
+- Frontend build: pass.
+
 ## Reviewed Inputs
 
 - `docs/project-state/core-release-checklist.md`

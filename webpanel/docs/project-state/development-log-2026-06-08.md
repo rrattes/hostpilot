@@ -188,3 +188,73 @@ operating model.
 Resolve the Ubuntu 26.04 Python 3.14 dependency compatibility gap, then
 reconcile the local branch with `origin/main` and add focused frontend automated
 coverage for the dashboard/sidebar shell.
+
+## Project State Refresh - 2026-06-11
+
+The project state documentation was refreshed after the Core readiness, security
+gate, audit matrix, backup, auth/session, roles, and deployment work.
+
+Latest Core items recorded:
+
+- Auth/session basics hardened with mandatory non-dev secret, configurable token
+  lifetime, password change endpoint, minimum password policy, and audit events.
+- Core user management implemented for listing, creating, enabling/disabling,
+  assigning roles, and manual password reset.
+- Roles & Permissions read-only UI implemented and repaired so it handles
+  loading, empty, and error states.
+- Core Backup create/list workflow implemented with persisted metadata, real
+  backup artifact creation, RBAC permissions, and audit events.
+- Local Agent transport implemented over loopback HTTP with allowlisted mock
+  actions and backend development fallback.
+- Ubuntu lab deployment assets now pin runtime strategy to isolated Python 3.13
+  under `/opt/hostpilot/python`.
+- Core Security Gate, audit coverage matrix, and Core readiness decision are now
+  documented under `webpanel/docs/project-state/`.
+
+Latest recorded validation:
+
+- Backend pytest: `48 passed`.
+- Agent pytest: `6 passed`.
+- Frontend tests: no `test` script is configured.
+- Frontend build: production build completed successfully.
+
+Validation attempted during this state refresh:
+
+- Backend pytest: passed with `48 passed` after setting `TEMP` and `TMP` to a
+  workspace-local temporary directory. The local backend `.venv` launcher points
+  to a Python executable that is no longer present, so the available Codex
+  Python runtime was used with the backend venv site-packages.
+- Agent pytest: not valid in the current checkout; pytest collected `0` tests
+  because tracked agent package/test files are currently missing from the
+  working tree.
+- Frontend tests: no-op because no `test` script is configured.
+- Frontend build: passed.
+
+Current local Git issue found during the refresh:
+
+- Local `main` is ahead of `origin/main` by Core implementation commits and
+  behind `origin/main` by remote-only commits.
+- The working tree currently shows missing tracked files, including
+  `.github/workflows/ci.yml`, `webpanel/.gitignore`, `webpanel/README.md`, and
+  several agent packaging/test files.
+- `webpanel/.git.backup/` is present as untracked local backup data from the
+  earlier nested Git repository cleanup.
+- These missing tracked files were not staged as part of this documentation
+  update and should be reconciled before publishing destructive changes.
+
+Current known limitations:
+
+- Security Gate remains partial until dependency scan, Python security linting,
+  OWASP ZAP, Nessus/OpenVAS readiness, and formal RBAC/IDOR/BOLA checks are
+  completed.
+- Ubuntu lab should be revalidated end-to-end with `install-lab.sh` and
+  `check-lab.sh` after the Python 3.13 runtime pin.
+- No automated frontend regression test suite exists yet.
+- Core is Ready with Known Gaps for Web module work, not production release.
+
+Next recommended technical step:
+
+Reconcile local `main` with `origin/main`, restore or intentionally remove the
+missing tracked files, and then push a clean branch. After Git state is clean,
+add focused frontend regression tests for the authenticated Core shell and Core
+admin pages.

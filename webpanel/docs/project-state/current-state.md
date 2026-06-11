@@ -1,46 +1,46 @@
 # HostPilot Current Project State
 
-Date: 2026-06-08
+Date: 2026-06-11
 
-## 1. Current Repository Structure
+## Repository
+
+- Canonical local repository root: `C:\Users\Admin\OneDrive\Documentos\WebManager`.
+- Project root inside the repository: `webpanel/`.
+- Current branch: `main`.
+- Git remote: `https://github.com/rrattes/hostpilot.git`.
+- Current local branch status: ahead of `origin/main` with Core implementation commits and behind `origin/main` with remote-only commits. Remote reconciliation is still required before a normal fast-forward push can succeed.
+
+## Current Repo Structure
 
 ```text
 webpanel/
   backend/
     alembic/
-      versions/
     app/
       api/
       core/
       db/
       scripts/
-      main.py
+      services/
     tests/
-    alembic.ini
-    pyproject.toml
-    requirements.txt
   frontend/
     src/
       components/
-      core/
       pages/
-    index.html
-    package.json
-    tsconfig.json
-    vite.config.ts
+      services/
   agent/
+    tests/
     webpanel_agent/
       actions/
       mock/
       policies/
-      contracts.py
-      main.py
-    tests/
-    pyproject.toml
-    requirements.txt
   deploy/
+    nginx/
+    scripts/
+    systemd/
   docs/
     architecture/
+    deploy/
     modules/
     project-state/
     security/
@@ -49,378 +49,99 @@ webpanel/
     test.ps1
 ```
 
-The repository is still rooted under the `webpanel/` folder and uses package names such as `webpanel-agent` and `webpanel-frontend`. The product-facing name is HostPilot.
+## Latest Implemented Core Items
 
-## 2. Implemented So Far
+- Backend Core API is implemented with FastAPI, SQLite, SQLAlchemy, Alembic migrations, RBAC dependencies, audit log, jobs, notifications, module registry, settings/server record, auth/session basics, user management, roles/permissions read APIs, local Agent gateway, and Core backup endpoints.
+- Auth/session basics include mandatory `HOSTPILOT_SECRET_KEY` outside dev/test, explicit dev/test fallback, configurable token lifetime, minimum password policy, current-user password change endpoint, and documented stateless logout behavior.
+- User management supports listing users, creating users, active status updates, role assignment, manual password reset, and audit events for the relevant mutations.
+- Roles & Permissions UI is read-only and shows seeded Core roles, assigned permissions, and users where available.
+- Core Backup is implemented as a manual create/list flow with RBAC permissions, persisted metadata, audit events, configurable dev-safe backup path, SQLite/config manifest archive content, and backend regression coverage.
+- Agent transport is implemented as a local HTTP service bound to loopback with allowlisted `mock.health` and `mock.system_info`, request/response validation, timeout handling, request IDs, and backend fallback to mock when unavailable in development.
+- Frontend includes Login, Dashboard, Agent, Audit Log, Jobs, Notifications, Server, Settings, Users, Roles & Permissions, Backups, and Change Password views with the dark technical console style.
+- Windows development scripts exist for local dev/test workflows under `webpanel/scripts/`.
+- GitHub Actions CI exists at `.github/workflows/ci.yml` in the tracked history and validates backend, agent, and frontend jobs with Python 3.13 alignment.
+- Ubuntu lab deployment templates, installer, and check scripts exist under `webpanel/deploy/`, with the lab runtime pinned to isolated Python 3.13 under `/opt/hostpilot/python`.
 
-- Monorepo scaffold for backend, frontend, agent, deploy placeholders, and docs.
-- FastAPI backend with SQLite, SQLAlchemy models, Alembic migrations, and tests.
-- JWT login flow with Argon2id password hashing and admin bootstrap script.
-- Backend-enforced RBAC with seeded roles and permissions.
-- Module registry with safe state management only.
-- Settings, local server display record, audit log, jobs, notifications, health/status, and mock agent gateway endpoints.
-- React/Vite frontend with dark technical layout, login, protected routes, dashboard, module cards, settings/server/audit/jobs/agent/notifications pages.
-- Refined dashboard and sidebar presentation with denser technical cards, clearer summary hierarchy, polished primary navigation, bottom utility Settings access, and Core shown as active platform context.
-- Python mock agent contract with allowlisted mock actions only.
+## Latest Validation Results
 
-No real web server, Nginx, PHP, SSL, Docker, KVM, firewall, apt, systemd, SSH, RDP, VNC, or terminal feature is implemented.
+Latest full validation recorded during Core readiness:
 
-## 3. Backend Status
+| Check | Result |
+| --- | --- |
+| Backend pytest | Pass: `48 passed`. |
+| Agent pytest | Pass: `6 passed`. |
+| Frontend tests | Not configured: no frontend `test` script exists. |
+| Frontend build | Pass: production build completed. |
 
-### FastAPI App
+Current documentation update validation from the local workspace:
 
-Implemented in `backend/app/main.py`. Routers are registered for auth, core status, modules, settings, server, audit, jobs, notifications, and agent gateway.
+| Check | Result |
+| --- | --- |
+| Backend pytest | Pass: `48 passed` using the available Codex Python runtime plus backend venv site-packages and workspace-local `TEMP/TMP`. |
+| Agent pytest | Not valid locally: collected `0` tests because tracked agent test/package files are currently missing from the working tree. |
+| Frontend tests | No-op: no frontend `test` script is configured. |
+| Frontend build | Pass: production build completed. |
 
-### Database Models And Migrations
+The working tree currently has missing tracked files, including `.github/workflows/ci.yml`, `webpanel/.gitignore`, `webpanel/README.md`, and some agent packaging/test files. Those deletions are not included in this documentation update and should be reconciled before publishing destructive changes.
 
-SQLAlchemy models exist in `backend/app/db/models.py`.
+## CI Status
 
-Implemented tables:
-- `users`
-- `roles`
-- `permissions`
-- `user_roles`
-- `role_permissions`
-- `modules`
-- `settings`
-- `jobs`
-- `audit_events`
-- `notifications`
-- `servers`
+- GitHub Actions workflow is defined for push and pull request validation against `main`.
+- Jobs cover backend migrations/tests, agent tests, and frontend build.
+- Latest remote CI result was not queried in this local documentation pass.
 
-Alembic migrations exist from `20260605_0001` through `20260605_0008`.
+## Ubuntu Lab Status
 
-Default database URL is `sqlite:///./hostpilot.db`, configurable with `HOSTPILOT_DATABASE_URL`.
-
-### Auth
+- Ubuntu lab deployment was validated on Ubuntu 26.04 at `192.168.0.63` using lab-only root SSH.
+- Core was bound to `127.0.0.1:8000`.
+- Agent was bound to `127.0.0.1:8765`.
+- Nginx exposed the lab UI on port `8080`.
+- Python runtime decision: use isolated Python 3.13 under `/opt/hostpilot/python`; do not rely on Ubuntu 26.04 system Python 3.14 for app runtime yet.
+- Remaining lab task: re-run `install-lab.sh` and `check-lab.sh` end-to-end after the Python 3.13 pin.
 
-Implemented:
-- Argon2id password hashing via `argon2-cffi`.
-- JWT bearer access tokens via `PyJWT`.
-- Admin bootstrap script: `python -m app.scripts.bootstrap_admin`.
-- Login endpoint.
-- Current user endpoint.
-- Basic in-memory login rate limiting.
+## Security Gate Status
 
-Incomplete / not production-ready:
-- No refresh tokens.
-- No token revocation or server-side logout.
-- No password reset.
-- No OAuth/SSO/2FA.
-- Default JWT secret is development-only unless `HOSTPILOT_SECRET_KEY` is set.
+- Core Security Gate document exists at `webpanel/docs/security/core-security-gate.md`.
+- Security Gate results are recorded in `webpanel/docs/project-state/security-gate-results-2026-06-08.md`.
+- Practical checks passed: backend tests, agent tests, frontend build, frontend audit, local file ignore review, and basic Agent allowlist review.
+- Pending checks: Python dependency scan, Python security linting, OWASP ZAP baseline, Nessus/OpenVAS readiness, and formal RBAC/IDOR/BOLA manual matrix.
 
-### RBAC
+## Audit Coverage Status
 
-Implemented in `backend/app/core/rbac/permissions.py`.
+- Audit coverage matrix exists at `webpanel/docs/project-state/audit-coverage-matrix.md`.
+- Implemented Core mutation workflows are covered or partially covered according to the matrix.
+- Known audit hardening gaps remain: retention enforcement, export policy, tamper-resistant storage decision, and formal read-access audit policy.
 
-RBAC is enforced in backend dependencies, not only the frontend. Seeded permissions cover Core, modules, audit, jobs, settings, agent, and notifications.
+## Frontend Regression Test Status
 
-### Modules
+- Frontend production build passes in the latest recorded validation.
+- No automated frontend test script is configured yet.
+- Recommended next frontend quality step is to add focused regression coverage for authenticated shell routing, Dashboard rendering, Settings account actions, Users, Roles, and Backups.
 
-Implemented:
-- List modules.
-- Get module by slug.
-- Update module state.
-- Valid module states: `available`, `installed`, `enabled`, `locked`.
-- Seeded module registry with `core` enabled and future modules locked.
+## Known Gaps
 
-Not implemented:
-- No real module loading system.
-- No module package installation.
-- No Nginx/PHP/SSL/Docker/KVM behavior.
+- Local Git worktree currently shows missing tracked files and untracked `webpanel/.git.backup/` contents. This must be cleaned or intentionally reconciled before pushing a clean state.
+- Local `main` is ahead of and behind `origin/main`; normal push may be rejected until remote-only commits are integrated.
+- Core is ready to start Web module work only with known gaps; it is not production/release ready.
+- No refresh tokens, token revocation store, password reset email, SSO/OAuth, or 2FA yet.
+- No restore, scheduled backup, cloud backup, website backup, Nginx backup, or SSL backup.
+- Jobs remain simple/synchronous for Core flows; no worker queue, retries, or scheduler.
+- Security Gate remains partial until the external/manual checks are completed.
 
-### Settings
+## Current Development Ports
 
-Implemented:
-- List settings.
-- Get setting.
-- Update setting.
-- Audit event on update.
-
-Seeded settings:
-- `core.product_name`
-- `core.timezone`
-- `core.audit_retention_days`
-
-Settings are generic key/value records. There is no typed settings schema yet.
-
-### Audit
-
-Implemented:
-- List audit events with filters and pagination.
-- Get audit event by id.
-- Audit events for login success/failure, RBAC access denied, settings update, server display update, module state update, jobs, and agent actions.
-
-Incomplete:
-- No retention policy enforcement.
-- No export.
-- No tamper-resistant storage.
-
-### Jobs
-
-Implemented:
-- List jobs with filters and pagination.
-- Get job by id.
-- Create mock/dev job.
-- Agent gateway creates and updates jobs around mock actions.
-
-Incomplete:
-- No async worker.
-- No queue backend.
-- No retries or scheduling.
-
-### Notifications
-
-Implemented:
-- List own/global notifications.
-- Mark one notification read.
-- Mark all visible notifications read.
-- Unread count.
-- Notifications are created for failed login, access denied, mock agent job completed, and mock agent job failed.
-
-Incomplete:
-- No delivery channels.
-- No user preferences.
-- No persistence policy beyond the database table.
-
-### Agent Gateway
-
-Implemented:
-- `GET /api/agent/status`
-- `POST /api/agent/actions/mock.health`
-- `POST /api/agent/actions/mock.system_info`
-- `GET /api/agent/jobs/recent`
-- Gateway service creates jobs, updates job results, and records audit events.
-
-Important: the backend mock gateway executes in-process mock code only. It does not call shell commands or the operating system.
-
-## 4. Frontend Status
-
-### Layout
-
-Implemented dark technical shell with sidebar, topbar, content area, notification bell/dropdown, and protected navigation.
-
-Latest UI refinement:
-- Sidebar primary navigation is limited to Dashboard, Server, Agent, Notifications, Audit Log, and Jobs.
-- Settings was moved to a compact bottom utility area while preserving the `/settings` route.
-- Core is shown as the active platform context instead of a random module navigation button.
-- Dashboard summary cards were tightened with improved spacing, hierarchy, borders, shadows, hover states, and reduced awkward empty space.
-- Module registry cards were made denser while preserving existing module state controls.
-
-### Login
-
-Implemented login page. The frontend stores the JWT in `sessionStorage`. It loads the current user and permissions on app start.
-
-### Dashboard
-
-Implemented dashboard using backend health/status data for:
-- Core status.
-- Database status.
-- Mock agent status.
-- Local server record.
-- Enabled/locked module counts.
-- Recent jobs count.
-- Recent audit events count.
-- Agent status panel.
-
-### Module Cards
-
-Module cards are loaded from backend registry data. Locked modules remain disabled. Users with `modules.manage` can change registry state, but this does not enable real module features.
-
-### Pages Implemented
-
-- Login.
-- Dashboard.
-- Agent.
-- Audit Log.
-- Jobs.
-- Notifications.
-- Server.
-- Settings.
-
-No user management UI exists.
-
-## 5. Agent Status
-
-Implemented in `agent/webpanel_agent`.
-
-### Mock Actions
-
-- `mock.health`
-- `mock.system_info`
-
-### Action Contract
-
-Request contract:
-- `action`
-- `payload`
-- `requested_by`
-- `request_id`
-
-Response contract:
-- `success`
-- `status`
-- `data`
-- `error`
-- `duration_ms`
-
-### Allowlist / Policy
-
-The allowlist is defined in `agent/webpanel_agent/policies/allowlist.py`.
-
-### Real System Command Usage
-
-No real shell/system command execution is present in the agent code. Search checks found no `subprocess`, `os.system`, `Popen`, `systemctl`, `apt`, `docker.sock`, or `shell=True` usage in backend or agent source.
-
-## 6. Security Status
-
-The Core Security Gate document exists at `docs/security/core-security-gate.md` and defines pass/fail checklists for release security validation.
-
-### Auth / Session Approach
-
-The backend uses JWT bearer tokens. The frontend stores the token in `sessionStorage`.
-
-This is acceptable for the current local-development scaffold, but not production-ready by itself. Production work should define token lifetime, secret management, TLS assumptions, refresh/revocation strategy, and browser storage policy.
-
-### RBAC Enforcement
-
-RBAC is enforced in FastAPI dependencies. Frontend visibility is convenience only.
-
-### Audit Coverage
-
-Covered:
-- Login success.
-- Login failure.
-- Access denied.
-- Settings update.
-- Server display update.
-- Module state update.
-- Mock job creation.
-- Mock agent action requested/completed.
-
-Incomplete:
-- No audit retention enforcement.
-- No immutable audit backend.
-
-### Unsafe Patterns Found
-
-No shell/system execution patterns were found in backend or agent source during the latest search.
-
-### Shell/System Command Execution Check
-
-Checked patterns:
-- `subprocess`
-- `os.system`
-- `Popen`
-- `systemctl`
-- `apt`
-- `docker.sock`
-- `exec(`
-- `shell=True`
-
-No matches were found in backend or agent source.
-
-## 7. Gaps And TODOs
-
-- Production deployment is not implemented.
-- No systemd/Nginx deployment files beyond placeholders.
-- No user management UI.
-- No password reset, 2FA, OAuth, SSO, token refresh, or token revocation.
-- No real agent transport. Backend gateway currently uses in-process mock behavior.
-- No real module package loading or module install lifecycle.
-- No async job worker.
-- No typed settings schema.
-- No audit retention enforcement.
-- No notification preferences or delivery channels.
-- No frontend automated tests yet.
-- GitHub Actions CI has been added at `.github/workflows/ci.yml` to run backend tests with migrations, agent tests, and frontend build on push and pull request to `main`.
-- Windows development and test scripts exist at `scripts/dev.ps1` and `scripts/test.ps1`.
-
-## 8. Known Risks
-
-- JWT default secret is development-only. `HOSTPILOT_SECRET_KEY` must be configured for non-development use.
-- In-memory login rate limiting resets on process restart and is not suitable for clustered production.
-- SQLite is fine for the scaffold, but production concurrency and backup strategy need design.
-- `sessionStorage` token storage has browser-side XSS exposure if frontend security regresses.
-- RBAC exists, but permissions are broad and early-stage.
-- The frontend can show controls based on permissions, but backend RBAC remains the real security boundary.
-- There is no formal threat model yet.
-
-## 9. Exact Commands To Run
-
-### Windows Dev Runner
-
-```powershell
-cd webpanel
-.\scripts\dev.ps1
-```
-
-Development ports:
 - Backend: `http://127.0.0.1:8000`
 - API docs: `http://127.0.0.1:8000/docs`
 - Frontend: `http://127.0.0.1:5173`
+- Agent: `http://127.0.0.1:8765`
+- Ubuntu lab UI through Nginx: `http://192.168.0.63:8080`
 
-### Windows Test Runner
+## Core Readiness Decision
 
-```powershell
-cd webpanel
-.\scripts\test.ps1
-```
+Current decision: Ready with Known Gaps for starting the Web module.
 
-### Backend
+This means Web module work can begin behind the existing Core module/RBAC/audit/Agent boundaries. It does not mean Core is ready for production release.
 
-```bash
-cd webpanel/backend
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
+## Next Recommended Technical Step
 
-### Database Migration / Init
-
-```bash
-cd webpanel/backend
-alembic upgrade head
-python -m app.scripts.bootstrap_admin --email admin@example.com
-```
-
-### Frontend
-
-```bash
-cd webpanel/frontend
-npm install
-npm run dev
-```
-
-### Agent Mock
-
-```bash
-cd webpanel/agent
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-python -m webpanel_agent.main
-```
-
-### Tests
-
-```bash
-cd webpanel/backend
-python -m pytest
-```
-
-```bash
-cd webpanel/agent
-python -m pytest
-```
-
-```bash
-cd webpanel/frontend
-npm install
-npm run build
-```
-
-## 10. Recommended Next Step
-
-Recommended next technical step: reconcile the local branch with `origin/main` and then add frontend automated coverage for the dashboard/sidebar shell before adding new product behavior.
+Reconcile local `main` with `origin/main` and clean the missing tracked files before pushing. After Git state is clean, add focused frontend regression tests for the authenticated Core shell and Core admin pages.

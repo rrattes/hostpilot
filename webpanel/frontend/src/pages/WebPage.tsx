@@ -1,5 +1,6 @@
 import {
   Braces,
+  FileCode2,
   FileText,
   Globe2,
   Lock,
@@ -16,8 +17,10 @@ import {
   disableWebSite,
   getWebStatus,
   listWebSites,
+  previewWebSiteNginxConfig,
   type WebSectionStatus,
   type WebSite,
+  type WebSiteNginxPreview,
   type WebStatus,
 } from "../core/api/web";
 import { useAuth } from "../core/auth/AuthProvider";
@@ -47,6 +50,7 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
   const [error, setError] = useState<string | null>(null);
   const [siteError, setSiteError] = useState<string | null>(null);
   const [siteMessage, setSiteMessage] = useState<string | null>(null);
+  const [nginxPreview, setNginxPreview] = useState<WebSiteNginxPreview | null>(null);
   const sections = useMemo(() => status?.sections ?? fallbackSections(), [status]);
 
   useEffect(() => {
@@ -112,6 +116,18 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
     } catch {
       setSiteError("Unable to disable Web site record.");
       setSiteMessage(null);
+    }
+  }
+
+  async function handlePreviewNginxConfig(siteId: number) {
+    if (!token || !canViewSites) return;
+
+    try {
+      setNginxPreview(await previewWebSiteNginxConfig(token, siteId));
+      setSiteError(null);
+    } catch {
+      setSiteError("Unable to generate Nginx config preview.");
+      setNginxPreview(null);
     }
   }
 
@@ -247,7 +263,7 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                 <th>Root path</th>
                 <th>Runtime</th>
                 <th>SSL</th>
-                <th>Action</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -282,15 +298,26 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                     <td>{site.php_runtime}</td>
                     <td>{site.ssl_enabled ? "Flagged" : "Off"}</td>
                     <td>
-                      <button
-                        className="icon-text-button state-disabled"
-                        disabled={!canManageSites || site.status === "disabled"}
-                        onClick={() => handleDisableSite(site.id)}
-                        type="button"
-                      >
-                        <Lock size={15} />
-                        Disable record
-                      </button>
+                      <div className="web-site-actions">
+                        <button
+                          className="icon-text-button"
+                          disabled={!canViewSites}
+                          onClick={() => handlePreviewNginxConfig(site.id)}
+                          type="button"
+                        >
+                          <FileCode2 size={15} />
+                          Preview Nginx Config
+                        </button>
+                        <button
+                          className="icon-text-button state-disabled"
+                          disabled={!canManageSites || site.status === "disabled"}
+                          onClick={() => handleDisableSite(site.id)}
+                          type="button"
+                        >
+                          <Lock size={15} />
+                          Disable record
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -299,6 +326,33 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
           </table>
         </div>
       </section>
+
+      {nginxPreview ? (
+        <div className="modal-backdrop" role="presentation">
+          <section className="confirm-modal nginx-preview-modal" aria-label="Nginx config preview">
+            <div>
+              <span className="eyebrow">Preview only</span>
+              <h2>Nginx config</h2>
+            </div>
+            <p>
+              Generated for {nginxPreview.domain}. This text was not saved, tested, reloaded, or
+              applied to the server.
+            </p>
+            <pre className="config-preview-block">
+              <code>{nginxPreview.config}</code>
+            </pre>
+            <div className="modal-actions">
+              <button
+                className="icon-text-button"
+                onClick={() => setNginxPreview(null)}
+                type="button"
+              >
+                Close
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }

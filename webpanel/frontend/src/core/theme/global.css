@@ -997,6 +997,30 @@ textarea {
   color: #ffc7d0;
 }
 
+.web-site-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.nginx-preview-modal {
+  max-width: min(860px, calc(100vw - 32px));
+}
+
+.config-preview-block {
+  background: #070b10;
+  border: 1px solid #263546;
+  border-radius: 8px;
+  color: #c7d0dc;
+  font-size: 12px;
+  line-height: 1.5;
+  max-height: min(58vh, 560px);
+  margin: 0;
+  overflow: auto;
+  padding: 14px;
+  white-space: pre;
+}
+
 .rbac-readonly-note {
   align-items: flex-start;
   background: #0d141d;

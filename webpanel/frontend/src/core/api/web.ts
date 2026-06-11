@@ -30,6 +30,13 @@ export interface WebSite {
   updated_at: string;
 }
 
+export interface WebSiteNginxPreview {
+  site_id: number;
+  domain: string;
+  config: string;
+  saved: boolean;
+}
+
 export function getWebStatus(token: string) {
   return apiRequest<WebStatus>("/api/core/web/status", { token });
 }
@@ -57,6 +64,12 @@ export function createWebSite(
 export function disableWebSite(token: string, siteId: number) {
   return apiRequest<WebSite>(`/api/core/web/sites/${siteId}/disable`, {
     method: "PATCH",
+    token,
+  });
+}
+
+export function previewWebSiteNginxConfig(token: string, siteId: number) {
+  return apiRequest<WebSiteNginxPreview>(`/api/core/web/sites/${siteId}/nginx-preview`, {
     token,
   });
 }

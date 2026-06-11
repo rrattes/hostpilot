@@ -54,6 +54,13 @@ class WebSiteCreate(BaseModel):
     ssl_enabled: bool = False
 
 
+class WebSiteNginxPreviewRead(BaseModel):
+    site_id: int
+    domain: str
+    config: str
+    saved: bool = False
+
+
 WEB_SECTIONS = [
     WebSectionStatus(
         slug="sites",
@@ -218,6 +225,40 @@ def disable_web_site(
     return _site_read(site)
 
 
+@router.get(
+    "/web/sites/{site_id}/nginx-preview",
+    response_model=WebSiteNginxPreviewRead,
+    dependencies=[Depends(require_permission("web.sites.view"))],
+)
+def preview_web_site_nginx_config(
+    site_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> WebSiteNginxPreviewRead:
+    site = _site_or_404(db, site_id)
+    config = _nginx_preview(site)
+    record_audit_event(
+        db,
+        action="web.site.nginx_preview.generated",
+        target_type="web_site",
+        target_id=str(site.id),
+        outcome="success",
+        actor_user_id=user.id,
+        metadata={
+            "domain": site.domain,
+            "preview_only": "true",
+            "saved": "false",
+        },
+    )
+    db.commit()
+    return WebSiteNginxPreviewRead(
+        site_id=site.id,
+        domain=site.domain,
+        config=config,
+        saved=False,
+    )
+
+
 def _site_or_404(db: Session, site_id: int) -> WebSite:
     site = db.get(WebSite, site_id)
     if site is None:
@@ -236,3 +277,40 @@ def _site_read(site: WebSite) -> WebSiteRead:
         created_at=site.created_at,
         updated_at=site.updated_at,
     )
+
+
+def _nginx_preview(site: WebSite) -> str:
+    php_target = _php_fpm_target(site.php_runtime)
+    return f"""# HostPilot preview only - not written to disk.
+# Site status: {site.status}
+server {{
+    listen 80;
+    server_name {site.domain};
+
+    root {site.root_path};
+    index index.php index.html;
+
+    access_log /var/log/nginx/hostpilot/{site.domain}.access.log;
+    error_log /var/log/nginx/hostpilot/{site.domain}.error.log;
+
+    location / {{
+        try_files $uri $uri/ /index.php?$query_string;
+    }}
+
+    location ~ \\.php$ {{
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass {php_target};
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+    }}
+}}
+"""
+
+
+def _php_fpm_target(php_runtime: str) -> str:
+    normalized = php_runtime.strip().lower()
+    if normalized in {"", "none"}:
+        return "unix:/run/php/hostpilot-placeholder.sock"
+    if normalized.startswith("unix:") or normalized.startswith("127.0.0.1:"):
+        return normalized
+    version = normalized.removeprefix("php-").removeprefix("php")
+    return f"unix:/run/php/php{version}-fpm.sock"

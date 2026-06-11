@@ -170,3 +170,71 @@ def test_web_sites_create_requires_manage_permission() -> None:
     )
 
     assert response.status_code == 403
+
+
+def test_nginx_preview_is_view_only_and_audited() -> None:
+    token = _token_with_permissions(["web.sites.view"])
+    with TestingSessionLocal() as db:
+        site = WebSite(
+            domain="preview.example.com",
+            root_path="/srv/www/preview.example.com",
+            status="config_pending",
+            php_runtime="php-8.3",
+            ssl_enabled=False,
+        )
+        db.add(site)
+        db.commit()
+        site_id = site.id
+
+    client = TestClient(app)
+    response = client.get(
+        f"/api/core/web/sites/{site_id}/nginx-preview",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["site_id"] == site_id
+    assert payload["domain"] == "preview.example.com"
+    assert payload["saved"] is False
+    assert "server_name preview.example.com;" in payload["config"]
+    assert "root /srv/www/preview.example.com;" in payload["config"]
+    assert "index index.php index.html;" in payload["config"]
+    assert "access_log /var/log/nginx/hostpilot/preview.example.com.access.log;" in payload["config"]
+    assert "error_log /var/log/nginx/hostpilot/preview.example.com.error.log;" in payload["config"]
+    assert "fastcgi_pass unix:/run/php/php8.3-fpm.sock;" in payload["config"]
+
+    with TestingSessionLocal() as db:
+        site = db.get(WebSite, site_id)
+        audit_event = (
+            db.query(AuditEvent)
+            .filter(AuditEvent.action == "web.site.nginx_preview.generated")
+            .one()
+        )
+
+    assert site is not None
+    assert site.status == "config_pending"
+    assert audit_event.target_id == str(site_id)
+
+
+def test_nginx_preview_requires_sites_view_permission() -> None:
+    token = _token_with_permissions(["web.view"])
+    with TestingSessionLocal() as db:
+        site = WebSite(
+            domain="blocked.example.com",
+            root_path="/srv/www/blocked.example.com",
+            status="config_pending",
+            php_runtime="none",
+            ssl_enabled=False,
+        )
+        db.add(site)
+        db.commit()
+        site_id = site.id
+
+    client = TestClient(app)
+    response = client.get(
+        f"/api/core/web/sites/{site_id}/nginx-preview",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 403

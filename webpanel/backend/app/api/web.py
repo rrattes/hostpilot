@@ -1,4 +1,6 @@
 from datetime import datetime
+import posixpath
+import re
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -9,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.audit.events import record_audit_event
 from app.core.auth.dependencies import get_current_user
 from app.core.rbac.permissions import require_permission
-from app.db.models import Module, User, WebSite
+from app.db.models import Module, Setting, User, WebSite
 from app.db.session import get_db
 
 
@@ -17,6 +19,11 @@ router = APIRouter()
 
 
 SectionStatus = Literal["unavailable", "coming_soon"]
+DEFAULT_WEB_SITES_BASE_PATH = "/var/www/hostpilot-sites"
+DANGEROUS_ROOT_PATHS = {"/", "/bin", "/etc", "/home", "/usr", "/var"}
+DOMAIN_PATTERN = re.compile(
+    r"^(?=.{1,253}$)(?!-)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
+)
 
 
 class WebSectionStatus(BaseModel):
@@ -48,6 +55,13 @@ class WebSiteRead(BaseModel):
 
 
 class WebSiteCreate(BaseModel):
+    domain: str = Field(min_length=1, max_length=255)
+    root_path: str = Field(min_length=1)
+    php_runtime: str = Field(default="none", min_length=1, max_length=80)
+    ssl_enabled: bool = False
+
+
+class WebSiteUpdate(BaseModel):
     domain: str = Field(min_length=1, max_length=255)
     root_path: str = Field(min_length=1)
     php_runtime: str = Field(default="none", min_length=1, max_length=80)
@@ -154,13 +168,13 @@ def create_web_site(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> WebSiteRead:
-    domain = payload.domain.strip().lower()
-    root_path = payload.root_path.strip()
+    domain = _validate_domain(payload.domain)
+    root_path = _validate_root_path(payload.root_path, _allowed_base_path(db))
     php_runtime = payload.php_runtime.strip()
-    if not domain or not root_path or not php_runtime:
+    if not php_runtime:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Domain, root path, and PHP runtime are required.",
+            detail="PHP runtime is required.",
         )
 
     existing = db.scalar(select(WebSite).where(WebSite.domain == domain))
@@ -187,6 +201,56 @@ def create_web_site(
             "domain": site.domain,
             "status": site.status,
             "provisioning": "not_provisioned",
+        },
+    )
+    db.commit()
+    db.refresh(site)
+    return _site_read(site)
+
+
+@router.patch(
+    "/web/sites/{site_id}",
+    response_model=WebSiteRead,
+    dependencies=[Depends(require_permission("web.sites.manage"))],
+)
+def update_web_site(
+    site_id: int,
+    payload: WebSiteUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> WebSiteRead:
+    site = _site_or_404(db, site_id)
+    domain = _validate_domain(payload.domain)
+    root_path = _validate_root_path(payload.root_path, _allowed_base_path(db))
+    php_runtime = payload.php_runtime.strip()
+    if not php_runtime:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="PHP runtime is required.",
+        )
+
+    existing = db.scalar(select(WebSite).where(WebSite.domain == domain, WebSite.id != site.id))
+    if existing is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Site domain already exists")
+
+    previous_domain = site.domain
+    previous_root_path = site.root_path
+    site.domain = domain
+    site.root_path = root_path
+    site.php_runtime = php_runtime
+    site.ssl_enabled = payload.ssl_enabled
+    record_audit_event(
+        db,
+        action="web.site.updated",
+        target_type="web_site",
+        target_id=str(site.id),
+        outcome="success",
+        actor_user_id=user.id,
+        metadata={
+            "domain": site.domain,
+            "previous_domain": previous_domain,
+            "previous_root_path": previous_root_path,
+            "provisioning": "record_only",
         },
     )
     db.commit()
@@ -277,6 +341,55 @@ def _site_read(site: WebSite) -> WebSiteRead:
         created_at=site.created_at,
         updated_at=site.updated_at,
     )
+
+
+def _validate_domain(value: str) -> str:
+    domain = value.strip().lower().rstrip(".")
+    if not DOMAIN_PATTERN.fullmatch(domain):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Domain must be a valid hostname such as example.com.",
+        )
+    return domain
+
+
+def _allowed_base_path(db: Session) -> str:
+    setting = db.scalar(select(Setting).where(Setting.key == "web.sites.allowed_base_path"))
+    value = setting.value.strip() if setting is not None else DEFAULT_WEB_SITES_BASE_PATH
+    return posixpath.normpath(value) if value else DEFAULT_WEB_SITES_BASE_PATH
+
+
+def _validate_root_path(value: str, allowed_base_path: str) -> str:
+    root_path = value.strip()
+    if not root_path.startswith("/"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Root path must be an absolute path.",
+        )
+    if "\\" in root_path or "\x00" in root_path:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Root path contains unsupported characters.",
+        )
+    normalized = posixpath.normpath(root_path)
+    if normalized != root_path or ".." in root_path.split("/"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Root path must not contain traversal or redundant path segments.",
+        )
+    if normalized in DANGEROUS_ROOT_PATHS:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Root path points to a protected system path.",
+        )
+
+    allowed_base = posixpath.normpath(allowed_base_path)
+    if normalized != allowed_base and not normalized.startswith(f"{allowed_base}/"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Root path must be inside {allowed_base}.",
+        )
+    return normalized
 
 
 def _nginx_preview(site: WebSite) -> str:

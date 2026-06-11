@@ -967,6 +967,20 @@ textarea {
   font-weight: 700;
 }
 
+.web-validation-note {
+  background: #0d141d;
+  border: 1px solid #223041;
+  border-radius: 8px;
+  color: #8f9dad;
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 10px 12px;
+}
+
+.web-validation-note code {
+  color: #b9f3df;
+}
+
 .web-ssl-toggle {
   color: #aebaca !important;
 }

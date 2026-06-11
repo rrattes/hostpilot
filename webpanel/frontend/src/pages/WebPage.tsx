@@ -23,6 +23,7 @@ import {
   type WebSiteNginxPreview,
   type WebStatus,
 } from "../core/api/web";
+import { ApiError } from "../core/api/client";
 import { useAuth } from "../core/auth/AuthProvider";
 
 const sectionIcons = {
@@ -32,6 +33,7 @@ const sectionIcons = {
   logs: ScrollText,
   "php-runtime": Braces,
 };
+const defaultSitesBasePath = "/var/www/hostpilot-sites";
 
 interface WebPageProps {
   canManageSites: boolean;
@@ -99,8 +101,12 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
       setSslEnabled(false);
       setSiteError(null);
       setSiteMessage(`${created.domain} recorded as config pending. No files or services were changed.`);
-    } catch {
-      setSiteError("Unable to create Web site record.");
+    } catch (createError) {
+      setSiteError(
+        createError instanceof ApiError
+          ? createError.message
+          : "Unable to create Web site record.",
+      );
       setSiteMessage(null);
     }
   }
@@ -113,8 +119,12 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
       setSites((current) => current.map((site) => (site.id === disabled.id ? disabled : site)));
       setSiteError(null);
       setSiteMessage(`${disabled.domain} disabled as a registry record only.`);
-    } catch {
-      setSiteError("Unable to disable Web site record.");
+    } catch (disableError) {
+      setSiteError(
+        disableError instanceof ApiError
+          ? disableError.message
+          : "Unable to disable Web site record.",
+      );
       setSiteMessage(null);
     }
   }
@@ -125,8 +135,12 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
     try {
       setNginxPreview(await previewWebSiteNginxConfig(token, siteId));
       setSiteError(null);
-    } catch {
-      setSiteError("Unable to generate Nginx config preview.");
+    } catch (previewError) {
+      setSiteError(
+        previewError instanceof ApiError
+          ? previewError.message
+          : "Unable to generate Nginx config preview.",
+      );
       setNginxPreview(null);
     }
   }
@@ -222,7 +236,7 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
             <input
               disabled={!canManageSites}
               onChange={(event) => setRootPath(event.target.value)}
-              placeholder="/srv/www/example.com"
+              placeholder={`${defaultSitesBasePath}/example.com`}
               value={rootPath}
             />
           </label>
@@ -252,6 +266,10 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
             <Plus size={16} />
             Add Record
           </button>
+        </div>
+        <div className="web-validation-note">
+          New records must use a valid domain and a safe absolute root path under{" "}
+          <code>{defaultSitesBasePath}</code>. Validation only affects registry records.
         </div>
 
         <div className="data-table-wrap">

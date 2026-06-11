@@ -107,7 +107,7 @@ def test_web_sites_registry_create_list_get_and_disable() -> None:
         headers={"Authorization": f"Bearer {token}"},
         json={
             "domain": "Example.COM",
-            "root_path": "/srv/www/example.com",
+            "root_path": "/var/www/hostpilot-sites/example.com",
             "php_runtime": "php-8.3",
             "ssl_enabled": False,
         },
@@ -116,7 +116,7 @@ def test_web_sites_registry_create_list_get_and_disable() -> None:
     assert create_response.status_code == 201
     created = create_response.json()
     assert created["domain"] == "example.com"
-    assert created["root_path"] == "/srv/www/example.com"
+    assert created["root_path"] == "/var/www/hostpilot-sites/example.com"
     assert created["status"] == "config_pending"
     assert created["php_runtime"] == "php-8.3"
     assert created["ssl_enabled"] is False
@@ -163,7 +163,7 @@ def test_web_sites_create_requires_manage_permission() -> None:
         headers={"Authorization": f"Bearer {token}"},
         json={
             "domain": "example.com",
-            "root_path": "/srv/www/example.com",
+            "root_path": "/var/www/hostpilot-sites/example.com",
             "php_runtime": "none",
             "ssl_enabled": False,
         },
@@ -172,12 +172,141 @@ def test_web_sites_create_requires_manage_permission() -> None:
     assert response.status_code == 403
 
 
+def test_web_sites_reject_invalid_domains() -> None:
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+
+    for domain in ["", "localhost", "-example.com", "example..com", "https://example.com"]:
+        response = client.post(
+            "/api/core/web/sites",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "domain": domain,
+                "root_path": "/var/www/hostpilot-sites/example.com",
+                "php_runtime": "none",
+                "ssl_enabled": False,
+            },
+        )
+        assert response.status_code == 422
+
+
+def test_web_sites_reject_invalid_root_paths() -> None:
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+
+    for root_path in [
+        "/",
+        "/etc",
+        "/bin",
+        "/usr",
+        "/var",
+        "/home",
+        "relative/path",
+        "/var/www/hostpilot-sites/../escape",
+        "/var/www/other/example.com",
+    ]:
+        response = client.post(
+            "/api/core/web/sites",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "domain": "example.com",
+                "root_path": root_path,
+                "php_runtime": "none",
+                "ssl_enabled": False,
+            },
+        )
+        assert response.status_code == 422
+
+
+def test_web_sites_prevent_duplicate_domains_on_create_and_update() -> None:
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+
+    first = client.post(
+        "/api/core/web/sites",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": "first.example.com",
+            "root_path": "/var/www/hostpilot-sites/first.example.com",
+            "php_runtime": "none",
+            "ssl_enabled": False,
+        },
+    )
+    second = client.post(
+        "/api/core/web/sites",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": "second.example.com",
+            "root_path": "/var/www/hostpilot-sites/second.example.com",
+            "php_runtime": "none",
+            "ssl_enabled": False,
+        },
+    )
+    duplicate_create = client.post(
+        "/api/core/web/sites",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": "FIRST.example.com",
+            "root_path": "/var/www/hostpilot-sites/duplicate.example.com",
+            "php_runtime": "none",
+            "ssl_enabled": False,
+        },
+    )
+    duplicate_update = client.patch(
+        f"/api/core/web/sites/{second.json()['id']}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": "first.example.com",
+            "root_path": "/var/www/hostpilot-sites/second.example.com",
+            "php_runtime": "none",
+            "ssl_enabled": False,
+        },
+    )
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert duplicate_create.status_code == 409
+    assert duplicate_update.status_code == 409
+
+
+def test_web_sites_update_validates_and_updates_record_only() -> None:
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+
+    created = client.post(
+        "/api/core/web/sites",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": "old.example.com",
+            "root_path": "/var/www/hostpilot-sites/old.example.com",
+            "php_runtime": "none",
+            "ssl_enabled": False,
+        },
+    ).json()
+    updated = client.patch(
+        f"/api/core/web/sites/{created['id']}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": "new.example.com",
+            "root_path": "/var/www/hostpilot-sites/new.example.com",
+            "php_runtime": "php-8.3",
+            "ssl_enabled": True,
+        },
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["domain"] == "new.example.com"
+    assert updated.json()["root_path"] == "/var/www/hostpilot-sites/new.example.com"
+    assert updated.json()["php_runtime"] == "php-8.3"
+    assert updated.json()["ssl_enabled"] is True
+
+
 def test_nginx_preview_is_view_only_and_audited() -> None:
     token = _token_with_permissions(["web.sites.view"])
     with TestingSessionLocal() as db:
         site = WebSite(
             domain="preview.example.com",
-            root_path="/srv/www/preview.example.com",
+            root_path="/var/www/hostpilot-sites/preview.example.com",
             status="config_pending",
             php_runtime="php-8.3",
             ssl_enabled=False,
@@ -198,7 +327,7 @@ def test_nginx_preview_is_view_only_and_audited() -> None:
     assert payload["domain"] == "preview.example.com"
     assert payload["saved"] is False
     assert "server_name preview.example.com;" in payload["config"]
-    assert "root /srv/www/preview.example.com;" in payload["config"]
+    assert "root /var/www/hostpilot-sites/preview.example.com;" in payload["config"]
     assert "index index.php index.html;" in payload["config"]
     assert "access_log /var/log/nginx/hostpilot/preview.example.com.access.log;" in payload["config"]
     assert "error_log /var/log/nginx/hostpilot/preview.example.com.error.log;" in payload["config"]
@@ -222,7 +351,7 @@ def test_nginx_preview_requires_sites_view_permission() -> None:
     with TestingSessionLocal() as db:
         site = WebSite(
             domain="blocked.example.com",
-            root_path="/srv/www/blocked.example.com",
+            root_path="/var/www/hostpilot-sites/blocked.example.com",
             status="config_pending",
             php_runtime="none",
             ssl_enabled=False,

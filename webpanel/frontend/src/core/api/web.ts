@@ -61,6 +61,23 @@ export function createWebSite(
   });
 }
 
+export function updateWebSite(
+  token: string,
+  siteId: number,
+  payload: {
+    domain: string;
+    root_path: string;
+    php_runtime: string;
+    ssl_enabled: boolean;
+  },
+) {
+  return apiRequest<WebSite>(`/api/core/web/sites/${siteId}`, {
+    method: "PATCH",
+    token,
+    body: payload,
+  });
+}
+
 export function disableWebSite(token: string, siteId: number) {
   return apiRequest<WebSite>(`/api/core/web/sites/${siteId}/disable`, {
     method: "PATCH",

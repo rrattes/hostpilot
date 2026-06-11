@@ -62,8 +62,15 @@ ensure_runtime_user() {
     log "Creating runtime user ${HOSTPILOT_USER}."
     useradd --system --create-home --home-dir /var/lib/hostpilot --shell /usr/sbin/nologin "${HOSTPILOT_USER}"
   fi
-  mkdir -p "${APP_ROOT}" /etc/hostpilot /var/lib/hostpilot
+  mkdir -p \
+    "${APP_ROOT}" \
+    /etc/hostpilot \
+    /var/lib/hostpilot \
+    /var/www/hostpilot-sites \
+    /etc/nginx/sites-available/hostpilot \
+    /var/log/nginx/hostpilot
   chmod 750 /etc/hostpilot
+  chmod 755 /var/www/hostpilot-sites /etc/nginx/sites-available/hostpilot /var/log/nginx/hostpilot
 }
 
 ensure_python_runtime() {
@@ -190,6 +197,8 @@ install_hostpilot_templates() {
 start_services() {
   log "Starting HostPilot services."
   chown -R "${HOSTPILOT_USER}:${HOSTPILOT_GROUP}" "${APP_ROOT}" /var/lib/hostpilot
+  chmod u+rwx "${APP_DIR}/backend" "${APP_DIR}/agent"
+  chown -R "${HOSTPILOT_USER}:${HOSTPILOT_GROUP}" /var/www/hostpilot-sites
   systemctl daemon-reload
   nginx -t
   systemctl enable --now nginx.service

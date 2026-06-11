@@ -105,7 +105,9 @@ pip install -r requirements.txt
 ```
 
 The Agent template starts `python -m webpanel_agent.main` and is expected to bind
-to `127.0.0.1` only. The current agent exposes only mock allowlisted actions.
+to `127.0.0.1` only. The current agent exposes mock actions plus the controlled
+`web.nginx.apply_site_config` action, constrained to HostPilot-managed Nginx and
+webroot paths.
 
 ## Build Frontend
 
@@ -280,12 +282,80 @@ npm run build
 
 Result: production build completed successfully.
 
+## 2026-06-11 Controlled Nginx Apply Validation
+
+Validation target:
+
+- SSH alias: `hostpilot-lab`.
+- Lab IP: `192.168.0.63`.
+- Project root: `/opt/hostpilot/webpanel`.
+
+Deployment and service validation:
+
+- Latest local `main` tree was deployed to `/opt/hostpilot/webpanel`.
+- Alembic migrations ran through `20260611_0013`.
+- Core and Agent services were restarted.
+- Agent remained bound to `127.0.0.1:8765`.
+- Agent runs as root in the lab for the controlled Nginx apply path, with
+  systemd sandboxing and allowlisted actions constraining what it can do.
+- Agent service write paths were restricted to:
+  `/opt/hostpilot/webpanel/agent`, `/var/www/hostpilot-sites`,
+  `/etc/nginx/sites-available/hostpilot`, `/run/nginx.pid`, and
+  `/var/log/nginx`.
+- The lab Nginx config includes only HostPilot-managed site configs from
+  `/etc/nginx/sites-available/hostpilot/*.conf`.
+
+Web Site workflow validated:
+
+- Created Web site record for `lab-test.local`.
+- Used webroot `/var/www/hostpilot-sites/lab-test.local`.
+- Generated Nginx preview.
+- Generated apply plan.
+- Ran dry-run.
+- Ran controlled apply through Agent with typed confirmation
+  `APPLY NGINX PLAN lab-test.local`.
+
+Controlled apply result:
+
+- Config file created only at
+  `/etc/nginx/sites-available/hostpilot/lab-test.local.conf`.
+- Webroot created only at `/var/www/hostpilot-sites/lab-test.local`.
+- `nginx -t` passed.
+- `systemctl reload nginx` returned success.
+- Site record status became `applied`.
+- Agent job records exist for `web.nginx.apply_site_config`.
+- Audit records exist for Web apply and Agent action completion.
+
+Safety observations:
+
+- Initial validation attempts found missing sandbox write paths required by
+  `nginx -t`; the Agent rolled back the newly written config and did not reload
+  Nginx on those failed attempts.
+- No unrelated Nginx site files were created or modified.
+- No SSL configuration was created.
+- No PHP-FPM installation or configuration was performed.
+
+Final lab curl checks:
+
+- Core health: HTTP `200`.
+- Agent health: HTTP `200`.
+- Local lab UI: HTTP `200`.
+- LAN lab UI: HTTP `200`.
+- Unauthenticated API proxy check: HTTP `401`, expected for a protected endpoint.
+
+Validation commands passed locally and on the lab host:
+
+- Backend: `70 passed`.
+- Agent: `11 passed`.
+- Frontend production build completed successfully.
+
 ## Current Limits
 
 - The installer is lab-only and targets Ubuntu 26.04.
 - No SSL automation is included.
-- No Nginx site management is included.
-- No privileged Agent actions are included.
-- The Agent remains limited to allowlisted mock actions.
+- Nginx site management is limited to controlled HostPilot site config apply.
+- One privileged Agent action is included for controlled Nginx site config apply.
+  It remains allowlisted, loopback-only, path-constrained, and does not support
+  arbitrary commands.
 - Python 3.14 support remains intentionally deferred. The supported Ubuntu 26.04
   lab runtime is isolated Python 3.13 under `/opt/hostpilot/python`.

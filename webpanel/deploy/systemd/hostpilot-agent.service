@@ -6,8 +6,6 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=hostpilot
-Group=hostpilot
 WorkingDirectory=/opt/hostpilot/webpanel/agent
 Environment=HOSTPILOT_ENV=production
 Environment=HOSTPILOT_AGENT_HOST=127.0.0.1
@@ -27,6 +25,7 @@ RestrictSUIDSGID=true
 LockPersonality=true
 MemoryDenyWriteExecute=true
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/www/hostpilot-sites /etc/nginx/sites-available/hostpilot /run/nginx.pid /var/log/nginx
 
 [Install]
 WantedBy=multi-user.target

@@ -1094,6 +1094,48 @@ textarea {
   white-space: pre;
 }
 
+.apply-plan-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.apply-plan-fact {
+  background: #101923;
+  border: 1px solid #263546;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+}
+
+.apply-plan-fact.wide {
+  grid-column: 1 / -1;
+}
+
+.apply-plan-fact span,
+.apply-plan-section strong {
+  color: #7f8b99;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.apply-plan-fact code {
+  color: #d8dee9;
+  overflow-wrap: anywhere;
+}
+
+.apply-plan-section {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.apply-plan-section strong {
+  flex: 0 0 100%;
+}
+
 .rbac-readonly-note {
   align-items: flex-start;
   background: #0d141d;

@@ -92,6 +92,20 @@ class WebSiteReadinessRead(BaseModel):
     checks: list[WebSiteReadinessCheck]
 
 
+class WebSiteNginxApplyPlanRead(BaseModel):
+    site_id: int
+    domain: str
+    target_config_path: str
+    webroot_path: str
+    required_directories: list[str]
+    config_filename: str
+    validation_commands: list[str]
+    service_reload_command: str
+    risk_level: str
+    confirmation_phrase: str
+    plan_only: bool = True
+
+
 WEB_SECTIONS = [
     WebSectionStatus(
         slug="sites",
@@ -401,6 +415,42 @@ def mark_web_site_ready_to_apply(
     return _site_read(site)
 
 
+@router.get(
+    "/web/sites/{site_id}/nginx-apply-plan",
+    response_model=WebSiteNginxApplyPlanRead,
+    dependencies=[Depends(require_permission("web.sites.view"))],
+)
+def get_web_site_nginx_apply_plan(
+    site_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> WebSiteNginxApplyPlanRead:
+    site = _site_or_404(db, site_id)
+    if site.provisioning_status != "ready_to_apply":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Site must be ready_to_apply before generating an apply plan.",
+        )
+
+    plan = _nginx_apply_plan(site)
+    record_audit_event(
+        db,
+        action="web.site.nginx_apply_plan.generated",
+        target_type="web_site",
+        target_id=str(site.id),
+        outcome="success",
+        actor_user_id=user.id,
+        metadata={
+            "domain": site.domain,
+            "plan_only": "true",
+            "target_config_path": plan.target_config_path,
+            "risk_level": plan.risk_level,
+        },
+    )
+    db.commit()
+    return plan
+
+
 def _site_or_404(db: Session, site_id: int) -> WebSite:
     site = db.get(WebSite, site_id)
     if site is None:
@@ -593,6 +643,33 @@ server {{
     }}
 }}
 """
+
+
+def _nginx_apply_plan(site: WebSite) -> WebSiteNginxApplyPlanRead:
+    config_filename = f"{site.domain}.conf"
+    target_config_path = f"/etc/nginx/sites-available/{config_filename}"
+    return WebSiteNginxApplyPlanRead(
+        site_id=site.id,
+        domain=site.domain,
+        target_config_path=target_config_path,
+        webroot_path=site.root_path,
+        required_directories=[
+            site.root_path,
+            "/etc/nginx/sites-available",
+            "/etc/nginx/sites-enabled",
+            "/var/log/nginx/hostpilot",
+        ],
+        config_filename=config_filename,
+        validation_commands=[
+            "nginx -t",
+            f"test -f {target_config_path}",
+            f"test -d {site.root_path}",
+        ],
+        service_reload_command="systemctl reload nginx",
+        risk_level="medium",
+        confirmation_phrase=f"APPLY NGINX PLAN {site.domain}",
+        plan_only=True,
+    )
 
 
 def _php_fpm_target(php_runtime: str) -> str:

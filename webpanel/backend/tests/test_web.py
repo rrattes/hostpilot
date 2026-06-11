@@ -482,3 +482,85 @@ def test_web_site_readiness_blocks_ssl_until_automation_exists() -> None:
     checks = {check["slug"]: check["passed"] for check in readiness.json()["checks"]}
     assert readiness.json()["ready"] is False
     assert checks["ssl_disabled_pending"] is False
+
+
+def test_nginx_apply_plan_requires_ready_to_apply_status() -> None:
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = client.post(
+        "/api/core/web/sites",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": "plan-draft.example.com",
+            "root_path": "/var/www/hostpilot-sites/plan-draft.example.com",
+            "php_runtime": "php-8.3",
+            "ssl_enabled": False,
+        },
+    ).json()
+
+    response = client.get(
+        f"/api/core/web/sites/{created['id']}/nginx-apply-plan",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 409
+
+
+def test_nginx_apply_plan_is_preview_only_and_audited() -> None:
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = client.post(
+        "/api/core/web/sites",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": "plan.example.com",
+            "root_path": "/var/www/hostpilot-sites/plan.example.com",
+            "php_runtime": "php-8.3",
+            "ssl_enabled": False,
+        },
+    ).json()
+    client.get(
+        f"/api/core/web/sites/{created['id']}/nginx-preview",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    client.patch(
+        f"/api/core/web/sites/{created['id']}/mark-ready",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    response = client.get(
+        f"/api/core/web/sites/{created['id']}/nginx-apply-plan",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["site_id"] == created["id"]
+    assert payload["domain"] == "plan.example.com"
+    assert payload["target_config_path"] == "/etc/nginx/sites-available/plan.example.com.conf"
+    assert payload["webroot_path"] == "/var/www/hostpilot-sites/plan.example.com"
+    assert payload["config_filename"] == "plan.example.com.conf"
+    assert payload["required_directories"] == [
+        "/var/www/hostpilot-sites/plan.example.com",
+        "/etc/nginx/sites-available",
+        "/etc/nginx/sites-enabled",
+        "/var/log/nginx/hostpilot",
+    ]
+    assert payload["validation_commands"] == [
+        "nginx -t",
+        "test -f /etc/nginx/sites-available/plan.example.com.conf",
+        "test -d /var/www/hostpilot-sites/plan.example.com",
+    ]
+    assert payload["service_reload_command"] == "systemctl reload nginx"
+    assert payload["risk_level"] == "medium"
+    assert payload["confirmation_phrase"] == "APPLY NGINX PLAN plan.example.com"
+    assert payload["plan_only"] is True
+
+    with TestingSessionLocal() as db:
+        audit_event = (
+            db.query(AuditEvent)
+            .filter(AuditEvent.action == "web.site.nginx_apply_plan.generated")
+            .one()
+        )
+
+    assert audit_event.target_id == str(created["id"])

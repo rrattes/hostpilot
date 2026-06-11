@@ -60,6 +60,20 @@ export interface WebSiteReadiness {
   checks: WebSiteReadinessCheck[];
 }
 
+export interface WebSiteNginxApplyPlan {
+  site_id: number;
+  domain: string;
+  target_config_path: string;
+  webroot_path: string;
+  required_directories: string[];
+  config_filename: string;
+  validation_commands: string[];
+  service_reload_command: string;
+  risk_level: string;
+  confirmation_phrase: string;
+  plan_only: boolean;
+}
+
 export function getWebStatus(token: string) {
   return apiRequest<WebStatus>("/api/core/web/status", { token });
 }
@@ -123,6 +137,12 @@ export function getWebSiteReadiness(token: string, siteId: number) {
 export function markWebSiteReadyToApply(token: string, siteId: number) {
   return apiRequest<WebSite>(`/api/core/web/sites/${siteId}/mark-ready`, {
     method: "PATCH",
+    token,
+  });
+}
+
+export function getWebSiteNginxApplyPlan(token: string, siteId: number) {
+  return apiRequest<WebSiteNginxApplyPlan>(`/api/core/web/sites/${siteId}/nginx-apply-plan`, {
     token,
   });
 }

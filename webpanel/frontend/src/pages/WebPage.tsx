@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   createWebSite,
   disableWebSite,
+  getWebSiteNginxApplyPlan,
   getWebSiteReadiness,
   getWebStatus,
   listWebSites,
@@ -23,6 +24,7 @@ import {
   type ProvisioningStatus,
   type WebSectionStatus,
   type WebSite,
+  type WebSiteNginxApplyPlan,
   type WebSiteNginxPreview,
   type WebSiteReadiness,
   type WebStatus,
@@ -58,6 +60,7 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
   const [siteError, setSiteError] = useState<string | null>(null);
   const [siteMessage, setSiteMessage] = useState<string | null>(null);
   const [nginxPreview, setNginxPreview] = useState<WebSiteNginxPreview | null>(null);
+  const [applyPlan, setApplyPlan] = useState<WebSiteNginxApplyPlan | null>(null);
   const sections = useMemo(() => status?.sections ?? fallbackSections(), [status]);
 
   useEffect(() => {
@@ -192,6 +195,22 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
           : "Unable to mark Web site ready to apply.",
       );
       setSiteMessage(null);
+    }
+  }
+
+  async function handleViewApplyPlan(siteId: number) {
+    if (!token || !canViewSites) return;
+
+    try {
+      setApplyPlan(await getWebSiteNginxApplyPlan(token, siteId));
+      setSiteError(null);
+    } catch (planError) {
+      setSiteError(
+        planError instanceof ApiError
+          ? planError.message
+          : "Unable to generate Nginx apply plan.",
+      );
+      setApplyPlan(null);
     }
   }
 
@@ -393,6 +412,15 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                           Mark Ready
                         </button>
                         <button
+                          className="icon-text-button"
+                          disabled={!canViewSites || site.provisioning_status !== "ready_to_apply"}
+                          onClick={() => handleViewApplyPlan(site.id)}
+                          type="button"
+                        >
+                          <FileText size={15} />
+                          View Apply Plan
+                        </button>
+                        <button
                           className="icon-text-button state-disabled"
                           disabled={!canManageSites || site.status === "disabled"}
                           onClick={() => handleDisableSite(site.id)}
@@ -437,7 +465,63 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
           </section>
         </div>
       ) : null}
+
+      {applyPlan ? (
+        <div className="modal-backdrop" role="presentation">
+          <section className="confirm-modal nginx-preview-modal" aria-label="Nginx apply plan">
+            <div>
+              <span className="eyebrow">Plan only</span>
+              <h2>Nginx apply plan</h2>
+            </div>
+            <p>
+              Generated for {applyPlan.domain}. No files were written, no directories were created,
+              and no commands were run.
+            </p>
+            <div className="apply-plan-grid">
+              <PlanFact label="Target config path" value={applyPlan.target_config_path} />
+              <PlanFact label="Webroot path" value={applyPlan.webroot_path} />
+              <PlanFact label="Config filename" value={applyPlan.config_filename} />
+              <PlanFact label="Risk level" value={applyPlan.risk_level} />
+              <PlanFact label="Future confirmation" value={applyPlan.confirmation_phrase} wide />
+            </div>
+            <div className="apply-plan-section">
+              <strong>Required directories</strong>
+              {applyPlan.required_directories.map((directory) => (
+                <code className="path-code" key={directory}>{directory}</code>
+              ))}
+            </div>
+            <div className="apply-plan-section">
+              <strong>Validation commands for a future apply</strong>
+              {applyPlan.validation_commands.map((command) => (
+                <code className="path-code" key={command}>{command}</code>
+              ))}
+            </div>
+            <div className="apply-plan-section">
+              <strong>Future service reload command</strong>
+              <code className="path-code">{applyPlan.service_reload_command}</code>
+            </div>
+            <div className="modal-actions">
+              <button
+                className="icon-text-button"
+                onClick={() => setApplyPlan(null)}
+                type="button"
+              >
+                Close
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
+  );
+}
+
+function PlanFact({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {
+  return (
+    <div className={`apply-plan-fact ${wide ? "wide" : ""}`}>
+      <span>{label}</span>
+      <code>{value}</code>
+    </div>
   );
 }
 

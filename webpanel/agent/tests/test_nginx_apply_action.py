@@ -1,6 +1,6 @@
 import pytest
 
-from webpanel_agent.actions.nginx import CommandResult, apply_site_config
+from webpanel_agent.actions.nginx import CommandResult, apply_site_config, disable_site_config
 from webpanel_agent.contracts import AgentActionRequest
 from webpanel_agent.actions.mock import run_mock_action
 from webpanel_agent.policies.allowlist import allowed_actions
@@ -17,6 +17,12 @@ class FakeFilesystem:
 
     def write_text(self, path: str, content: str) -> None:
         self.files[path] = content
+
+    def exists(self, path: str) -> bool:
+        return path in self.files
+
+    def read_text(self, path: str) -> str:
+        return self.files[path]
 
     def remove_file(self, path: str) -> None:
         self.removed.append(path)
@@ -35,6 +41,7 @@ class FakeRunner:
 
 def test_nginx_apply_action_is_allowlisted() -> None:
     assert "web.nginx.apply_site_config" in allowed_actions()
+    assert "web.nginx.disable_site_config" in allowed_actions()
 
 
 def test_apply_site_config_success_uses_fixed_commands_and_paths() -> None:
@@ -91,6 +98,74 @@ def test_run_mock_action_dispatches_controlled_nginx_apply() -> None:
     assert response.status == "rejected"
 
 
+def test_disable_site_config_success_removes_only_hostpilot_config() -> None:
+    fs = FakeFilesystem()
+    fs.files["/etc/nginx/sites-available/hostpilot/example.com.conf"] = "server_name example.com;"
+    fs.files["/etc/nginx/sites-available/default"] = "unrelated"
+    runner = FakeRunner([CommandResult(0), CommandResult(0)])
+
+    result = disable_site_config(_disable_payload(), filesystem=fs, command_runner=runner)
+
+    assert result["disabled"] is True
+    assert result["reloaded"] is True
+    assert fs.removed == ["/etc/nginx/sites-available/hostpilot/example.com.conf"]
+    assert "/etc/nginx/sites-available/hostpilot/example.com.conf" not in fs.files
+    assert fs.files["/etc/nginx/sites-available/default"] == "unrelated"
+    assert runner.commands == [["nginx", "-t"], ["systemctl", "reload", "nginx"]]
+
+
+def test_disable_site_config_rolls_back_when_validation_fails() -> None:
+    fs = FakeFilesystem()
+    fs.files["/etc/nginx/sites-available/hostpilot/example.com.conf"] = "original config"
+    runner = FakeRunner([CommandResult(1, stderr="bad config")])
+
+    result = disable_site_config(_disable_payload(), filesystem=fs, command_runner=runner)
+
+    assert result["disabled"] is False
+    assert result["rolled_back"] is True
+    assert result["reloaded"] is False
+    assert fs.files["/etc/nginx/sites-available/hostpilot/example.com.conf"] == "original config"
+    assert runner.commands == [["nginx", "-t"]]
+
+
+def test_disable_site_config_rejects_unsafe_paths() -> None:
+    payload = _disable_payload()
+    payload["target_config_path"] = "/etc/nginx/sites-available/hostpilot/../default"
+
+    with pytest.raises(ValueError):
+        disable_site_config(payload, filesystem=FakeFilesystem(), command_runner=FakeRunner([]))
+
+
+def test_disable_site_config_protects_unrelated_configs() -> None:
+    fs = FakeFilesystem()
+    fs.files["/etc/nginx/sites-available/hostpilot/other.com.conf"] = "unrelated"
+    payload = _disable_payload()
+    payload["target_config_path"] = "/etc/nginx/sites-available/hostpilot/other.com.conf"
+
+    with pytest.raises(ValueError):
+        disable_site_config(payload, filesystem=fs, command_runner=FakeRunner([]))
+
+    assert fs.files["/etc/nginx/sites-available/hostpilot/other.com.conf"] == "unrelated"
+    assert fs.removed == []
+
+
+def test_run_mock_action_dispatches_controlled_nginx_disable() -> None:
+    response = run_mock_action(
+        AgentActionRequest(
+            action="web.nginx.disable_site_config",
+            payload={
+                **_disable_payload(),
+                "target_config_path": "/etc/nginx/sites-available/default",
+            },
+            requested_by="test",
+            request_id="req-2",
+        )
+    )
+
+    assert response.success is False
+    assert response.status == "rejected"
+
+
 def _payload() -> dict[str, str]:
     config = """server {
     listen 80;
@@ -105,5 +180,13 @@ def _payload() -> dict[str, str]:
         "target_config_path": "/etc/nginx/sites-available/hostpilot/example.com.conf",
         "config_content": config,
         "allowed_webroot_base": "/var/www/hostpilot-sites",
+        "allowed_nginx_base": "/etc/nginx/sites-available/hostpilot",
+    }
+
+
+def _disable_payload() -> dict[str, str]:
+    return {
+        "domain": "example.com",
+        "target_config_path": "/etc/nginx/sites-available/hostpilot/example.com.conf",
         "allowed_nginx_base": "/etc/nginx/sites-available/hostpilot",
     }

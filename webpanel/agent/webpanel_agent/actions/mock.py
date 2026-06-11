@@ -1,7 +1,7 @@
 from time import perf_counter
 from typing import Any
 
-from webpanel_agent.actions.nginx import apply_site_config
+from webpanel_agent.actions.nginx import apply_site_config, disable_site_config
 from webpanel_agent.contracts import AgentActionRequest, AgentActionResponse
 from webpanel_agent.mock.system_info import get_mock_system_info
 from webpanel_agent.policies.allowlist import is_action_allowed
@@ -29,6 +29,19 @@ def run_mock_action(request: AgentActionRequest) -> AgentActionResponse:
             str(result.get("status", "failed")),
             result,
             None if result.get("applied") else str(result.get("status", "Apply failed.")),
+            started_at,
+        )
+
+    if request.action == "web.nginx.disable_site_config":
+        try:
+            result = disable_site_config(request.payload)
+        except ValueError as exc:
+            return _response(False, "rejected", {}, str(exc), started_at)
+        return _response(
+            bool(result.get("disabled")),
+            str(result.get("status", "failed")),
+            result,
+            None if result.get("disabled") else str(result.get("status", "Disable failed.")),
             started_at,
         )
 

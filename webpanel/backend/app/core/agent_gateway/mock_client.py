@@ -4,7 +4,12 @@ from typing import Any
 from app.core.agent_gateway.contracts import AgentActionRequest, AgentActionResponse
 
 
-ALLOWED_MOCK_ACTIONS = {"mock.health", "mock.system_info", "web.nginx.apply_site_config"}
+ALLOWED_MOCK_ACTIONS = {
+    "mock.health",
+    "mock.system_info",
+    "web.nginx.apply_site_config",
+    "web.nginx.disable_site_config",
+}
 
 
 def allowed_mock_actions() -> list[str]:
@@ -41,6 +46,15 @@ def run_mock_action(request: AgentActionRequest) -> AgentActionResponse:
             "rejected",
             {},
             "Local agent is required for controlled Nginx apply.",
+            started_at,
+        )
+
+    if request.action == "web.nginx.disable_site_config":
+        return _response(
+            False,
+            "rejected",
+            {},
+            "Local agent is required for controlled Nginx disable.",
             started_at,
         )
 

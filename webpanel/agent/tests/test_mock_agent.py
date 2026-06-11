@@ -17,6 +17,7 @@ def test_health_check() -> None:
         "mock.health",
         "mock.system_info",
         "web.nginx.apply_site_config",
+        "web.nginx.disable_site_config",
     ]
 
 

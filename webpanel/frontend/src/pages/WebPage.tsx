@@ -16,6 +16,7 @@ import {
   applyWebSiteNginxConfig,
   createWebSite,
   disableWebSite,
+  disableWebSiteNginxConfig,
   getWebSiteNginxApplyPlan,
   getWebSiteReadiness,
   getWebStatus,
@@ -27,6 +28,7 @@ import {
   type WebSectionStatus,
   type WebSite,
   type WebSiteApplyResult,
+  type WebSiteDisableResult,
   type WebSiteDryRunResult,
   type WebSiteNginxApplyPlan,
   type WebSiteNginxPreview,
@@ -69,6 +71,9 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
   const [dryRunResult, setDryRunResult] = useState<WebSiteDryRunResult | null>(null);
   const [applyPhrase, setApplyPhrase] = useState("");
   const [applyResult, setApplyResult] = useState<WebSiteApplyResult | null>(null);
+  const [disableTarget, setDisableTarget] = useState<WebSite | null>(null);
+  const [disablePhrase, setDisablePhrase] = useState("");
+  const [disableResult, setDisableResult] = useState<WebSiteDisableResult | null>(null);
   const sections = useMemo(() => status?.sections ?? fallbackSections(), [status]);
 
   useEffect(() => {
@@ -267,6 +272,38 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
     }
   }
 
+  async function handleDisableNginxConfig() {
+    if (!token || !disableTarget || !canManageSites) return;
+
+    try {
+      const result = await disableWebSiteNginxConfig(token, disableTarget.id, disablePhrase);
+      setDisableResult(result);
+      setSites((current) => current.map((site) => (site.id === result.site.id ? result.site : site)));
+      const readiness = await getWebSiteReadiness(token, result.site.id);
+      setReadinessBySiteId((current) => ({ ...current, [result.site.id]: readiness }));
+      setSiteError(null);
+      setSiteMessage(
+        result.success
+          ? `${result.site.domain} disabled through controlled Agent job #${result.job_id}.`
+          : `${result.site.domain} disable failed through Agent job #${result.job_id}.`,
+      );
+    } catch (disableError) {
+      setSiteError(
+        disableError instanceof ApiError
+          ? disableError.message
+          : "Unable to disable Nginx config.",
+      );
+      setDisableResult(null);
+    }
+  }
+
+  function openDisableModal(site: WebSite) {
+    setDisableTarget(site);
+    setDisablePhrase("");
+    setDisableResult(null);
+    setSiteError(null);
+  }
+
   return (
     <section className="data-page web-page" aria-label="Web module">
       <div className="section-heading">
@@ -293,8 +330,8 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
         <div>
           <strong>Read-only scaffold</strong>
           <span>
-            This page exposes module shape and status only. It does not create sites, edit Nginx,
-            request SSL certificates, manage PHP, read logs, or execute Agent actions.
+            This page manages Web site records and controlled Nginx workflows only. SSL, PHP
+            management, log browsing, deploy changes, and arbitrary Agent actions remain disabled.
           </span>
         </div>
       </div>
@@ -318,7 +355,7 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
             <span className="metric-label">Operational</span>
           </div>
           <strong>{status?.operational ? "Active" : "No"}</strong>
-          <p>No system, Nginx, SSL, PHP, site, deploy, or Agent workflow is enabled.</p>
+          <p>Only controlled HostPilot Nginx apply and disable workflows are available.</p>
         </div>
       </div>
 
@@ -482,6 +519,15 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                           <Lock size={15} />
                           Disable record
                         </button>
+                        <button
+                          className="icon-text-button state-disabled"
+                          disabled={!canManageSites || site.status !== "applied"}
+                          onClick={() => openDisableModal(site)}
+                          type="button"
+                        >
+                          <Lock size={15} />
+                          Disable Site
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -612,15 +658,81 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
           </section>
         </div>
       ) : null}
+
+      {disableTarget ? (
+        <div className="modal-backdrop" role="presentation">
+          <section className="confirm-modal nginx-preview-modal" aria-label="Disable Nginx site">
+            <div>
+              <span className="eyebrow">Controlled Agent disable</span>
+              <h2>Disable site</h2>
+            </div>
+            <p>
+              This removes only the HostPilot-managed config for {disableTarget.domain}, runs nginx
+              -t, and reloads Nginx only if validation passes. If validation fails, the removed
+              config is restored.
+            </p>
+            <div className="web-apply-warning">
+              <strong>Required confirmation</strong>
+              <span>{disableConfirmationPhrase(disableTarget)}</span>
+            </div>
+            <label className="dry-run-confirmation">
+              <span>Disable confirmation phrase</span>
+              <input
+                onChange={(event) => setDisablePhrase(event.target.value)}
+                placeholder={disableConfirmationPhrase(disableTarget)}
+                value={disablePhrase}
+              />
+            </label>
+            <button
+              className="primary-button compact"
+              disabled={
+                !canManageSites || disablePhrase !== disableConfirmationPhrase(disableTarget)
+              }
+              onClick={handleDisableNginxConfig}
+              type="button"
+            >
+              Disable Site
+            </button>
+            {disableResult ? <AgentResultPanel result={disableResult} mode="disable" /> : null}
+            <div className="modal-actions">
+              <button
+                className="icon-text-button"
+                onClick={() => {
+                  setDisableTarget(null);
+                  setDisablePhrase("");
+                  setDisableResult(null);
+                }}
+                type="button"
+              >
+                Close
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }
 
 function ApplyResultPanel({ result }: { result: WebSiteApplyResult }) {
+  return <AgentResultPanel result={result} mode="apply" />;
+}
+
+function AgentResultPanel({
+  result,
+  mode,
+}: {
+  result: WebSiteApplyResult | WebSiteDisableResult;
+  mode: "apply" | "disable";
+}) {
   return (
     <div className={`dry-run-result ${result.success ? "" : "failed"}`}>
       <strong>Agent job #{result.job_id}</strong>
-      <span>{result.success ? "Controlled apply completed." : result.error ?? "Controlled apply failed."}</span>
+      <span>
+        {result.success
+          ? `Controlled ${mode} completed.`
+          : result.error ?? `Controlled ${mode} failed.`}
+      </span>
       <div className="apply-plan-section">
         <strong>Agent status</strong>
         <code className="path-code">{result.status}</code>
@@ -631,6 +743,10 @@ function ApplyResultPanel({ result }: { result: WebSiteApplyResult }) {
       </pre>
     </div>
   );
+}
+
+function disableConfirmationPhrase(site: WebSite) {
+  return `DISABLE NGINX SITE ${site.domain}`;
 }
 
 function DryRunResultPanel({ result }: { result: WebSiteDryRunResult }) {

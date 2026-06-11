@@ -818,6 +818,160 @@ def test_controlled_nginx_apply_requires_manage_permission() -> None:
     assert response.status_code == 403
 
 
+def test_controlled_nginx_disable_calls_agent_and_updates_site(monkeypatch) -> None:
+    captured_payload: dict[str, object] | None = None
+
+    def fake_execute_agent_action(db: Session, *, action: str, payload: dict[str, object], user: User):
+        nonlocal captured_payload
+        captured_payload = payload
+        from app.db.models import Job
+
+        job = Job(
+            type="agent_action",
+            module="agent",
+            action=action,
+            status="completed",
+            payload="{}",
+            result="{}",
+        )
+        db.add(job)
+        db.flush()
+        return job, AgentActionResponse(
+            success=True,
+            status="disabled",
+            data={"disabled": True, "reloaded": True},
+            error=None,
+            duration_ms=3,
+        )
+
+    monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = _applied_site(client, token, "disable-agent.example.com")
+
+    response = client.post(
+        f"/api/core/web/sites/{created['id']}/nginx-disable",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"confirmation_phrase": "DISABLE NGINX SITE disable-agent.example.com"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["site"]["status"] == "disabled"
+    assert payload["site"]["provisioning_status"] == "disabled"
+    assert payload["result"]["reloaded"] is True
+    assert captured_payload is not None
+    assert captured_payload["target_config_path"] == (
+        "/etc/nginx/sites-available/hostpilot/disable-agent.example.com.conf"
+    )
+    assert captured_payload["allowed_nginx_base"] == "/etc/nginx/sites-available/hostpilot"
+
+    with TestingSessionLocal() as db:
+        audit_actions = [
+            row[0]
+            for row in db.query(AuditEvent.action)
+            .filter(
+                AuditEvent.target_type == "web_site",
+                AuditEvent.target_id == str(created["id"]),
+                AuditEvent.action.like("web.site.nginx_disable%"),
+            )
+            .order_by(AuditEvent.id)
+            .all()
+        ]
+    assert audit_actions == [
+        "web.site.nginx_disable.requested",
+        "web.site.nginx_disable.completed",
+    ]
+
+
+def test_controlled_nginx_disable_marks_error_on_validation_failure(monkeypatch) -> None:
+    def fake_execute_agent_action(db: Session, *, action: str, payload: dict[str, object], user: User):
+        from app.db.models import Job
+
+        job = Job(
+            type="agent_action",
+            module="agent",
+            action=action,
+            status="failed",
+            payload="{}",
+            result="{}",
+        )
+        db.add(job)
+        db.flush()
+        return job, AgentActionResponse(
+            success=False,
+            status="validation_failed",
+            data={"rolled_back": True, "reloaded": False},
+            error="validation_failed",
+            duration_ms=4,
+        )
+
+    monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = _applied_site(client, token, "disable-fail.example.com")
+
+    response = client.post(
+        f"/api/core/web/sites/{created['id']}/nginx-disable",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"confirmation_phrase": "DISABLE NGINX SITE disable-fail.example.com"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["success"] is False
+    assert response.json()["site"]["status"] == "error"
+    assert response.json()["site"]["provisioning_status"] == "error"
+    assert response.json()["result"]["rolled_back"] is True
+
+
+def test_controlled_nginx_disable_requires_applied_site_and_confirmation() -> None:
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = _ready_site(client, token, "disable-confirm.example.com")
+
+    response = client.post(
+        f"/api/core/web/sites/{created['id']}/nginx-disable",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"confirmation_phrase": "DISABLE NGINX SITE disable-confirm.example.com"},
+    )
+    assert response.status_code == 409
+
+    _mark_site_applied(created["id"])
+    wrong_phrase = client.post(
+        f"/api/core/web/sites/{created['id']}/nginx-disable",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"confirmation_phrase": "wrong phrase"},
+    )
+    assert wrong_phrase.status_code == 400
+
+
+def test_controlled_nginx_disable_requires_manage_permission() -> None:
+    manager_token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = _applied_site(client, manager_token, "disable-rbac.example.com")
+    with TestingSessionLocal() as db:
+        permission = db.query(Permission).filter(Permission.slug == "web.sites.view").one()
+        role = Role(slug="disable-viewer-rbac", name="Disable Viewer RBAC", permissions=[permission])
+        user = User(
+            email="disable-viewer-rbac@example.com",
+            display_name="Disable Viewer RBAC",
+            password_hash="not-used",
+            roles=[role],
+        )
+        db.add(user)
+        db.commit()
+        viewer_token = create_access_token(user.id)
+
+    response = client.post(
+        f"/api/core/web/sites/{created['id']}/nginx-disable",
+        headers={"Authorization": f"Bearer {viewer_token}"},
+        json={"confirmation_phrase": "DISABLE NGINX SITE disable-rbac.example.com"},
+    )
+
+    assert response.status_code == 403
+
+
 def _ready_site(client: TestClient, token: str, domain: str) -> dict[str, object]:
     created = client.post(
         "/api/core/web/sites",
@@ -838,3 +992,18 @@ def _ready_site(client: TestClient, token: str, domain: str) -> dict[str, object
         headers={"Authorization": f"Bearer {token}"},
     )
     return created
+
+
+def _applied_site(client: TestClient, token: str, domain: str) -> dict[str, object]:
+    created = _ready_site(client, token, domain)
+    _mark_site_applied(created["id"])
+    return created
+
+
+def _mark_site_applied(site_id: object) -> None:
+    with TestingSessionLocal() as db:
+        site = db.get(WebSite, site_id)
+        assert site is not None
+        site.status = "applied"
+        site.provisioning_status = "ready_to_apply"
+        db.commit()

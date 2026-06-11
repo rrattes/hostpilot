@@ -97,6 +97,8 @@ export interface WebSiteApplyResult {
   error: string | null;
 }
 
+export type WebSiteDisableResult = WebSiteApplyResult;
+
 export function getWebStatus(token: string) {
   return apiRequest<WebStatus>("/api/core/web/status", { token });
 }
@@ -188,6 +190,18 @@ export function applyWebSiteNginxConfig(
   confirmationPhrase: string,
 ) {
   return apiRequest<WebSiteApplyResult>(`/api/core/web/sites/${siteId}/nginx-apply`, {
+    method: "POST",
+    token,
+    body: { confirmation_phrase: confirmationPhrase },
+  });
+}
+
+export function disableWebSiteNginxConfig(
+  token: string,
+  siteId: number,
+  confirmationPhrase: string,
+) {
+  return apiRequest<WebSiteDisableResult>(`/api/core/web/sites/${siteId}/nginx-disable`, {
     method: "POST",
     token,
     body: { confirmation_phrase: confirmationPhrase },

@@ -138,6 +138,19 @@ class WebSiteApplyRead(BaseModel):
     error: str | None
 
 
+class WebSiteDisableRequest(BaseModel):
+    confirmation_phrase: str = Field(min_length=1)
+
+
+class WebSiteDisableRead(BaseModel):
+    site: WebSiteRead
+    job_id: int
+    success: bool
+    status: str
+    result: dict[str, object]
+    error: str | None
+
+
 WEB_SECTIONS = [
     WebSectionStatus(
         slug="sites",
@@ -609,6 +622,75 @@ def apply_web_site_nginx_config(
     )
 
 
+@router.post(
+    "/web/sites/{site_id}/nginx-disable",
+    response_model=WebSiteDisableRead,
+    dependencies=[Depends(require_permission("web.sites.manage"))],
+)
+def disable_web_site_nginx_config(
+    site_id: int,
+    payload: WebSiteDisableRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> WebSiteDisableRead:
+    site = _site_or_404(db, site_id)
+    if site.status != "applied":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Site must be applied before disabling Nginx config.",
+        )
+
+    confirmation_phrase = _nginx_disable_confirmation_phrase(site)
+    if payload.confirmation_phrase.strip() != confirmation_phrase:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Confirmation phrase does not match.",
+        )
+
+    agent_payload = _agent_disable_payload(site)
+    record_audit_event(
+        db,
+        action="web.site.nginx_disable.requested",
+        target_type="web_site",
+        target_id=str(site.id),
+        outcome="success",
+        actor_user_id=user.id,
+        metadata={"domain": site.domain, "target_config_path": agent_payload["target_config_path"]},
+    )
+    job, response = execute_mock_agent_action(
+        db,
+        action="web.nginx.disable_site_config",
+        payload=agent_payload,
+        user=user,
+    )
+    site.status = "disabled" if response.success else "error"
+    site.provisioning_status = "disabled" if response.success else "error"
+    record_audit_event(
+        db,
+        action="web.site.nginx_disable.completed",
+        target_type="web_site",
+        target_id=str(site.id),
+        outcome="success" if response.success else "failure",
+        actor_user_id=user.id,
+        metadata={
+            "domain": site.domain,
+            "job_id": str(job.id),
+            "agent_status": response.status,
+        },
+    )
+    db.commit()
+    db.refresh(site)
+    db.refresh(job)
+    return WebSiteDisableRead(
+        site=_site_read(site),
+        job_id=job.id,
+        success=response.success,
+        status=response.status,
+        result=response.data,
+        error=response.error,
+    )
+
+
 def _site_or_404(db: Session, site_id: int) -> WebSite:
     site = db.get(WebSite, site_id)
     if site is None:
@@ -858,6 +940,19 @@ def _agent_apply_payload(site: WebSite) -> dict[str, object]:
         "allowed_webroot_base": DEFAULT_WEB_SITES_BASE_PATH,
         "allowed_nginx_base": "/etc/nginx/sites-available/hostpilot",
     }
+
+
+def _agent_disable_payload(site: WebSite) -> dict[str, object]:
+    plan = _nginx_apply_plan(site)
+    return {
+        "domain": site.domain,
+        "target_config_path": plan.target_config_path,
+        "allowed_nginx_base": "/etc/nginx/sites-available/hostpilot",
+    }
+
+
+def _nginx_disable_confirmation_phrase(site: WebSite) -> str:
+    return f"DISABLE NGINX SITE {site.domain}"
 
 
 def _php_fpm_target(php_runtime: str) -> str:

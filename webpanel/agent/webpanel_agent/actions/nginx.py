@@ -15,6 +15,8 @@ DOMAIN_PATTERN = re.compile(
 
 class Filesystem(Protocol):
     def makedirs(self, path: str) -> None: ...
+    def exists(self, path: str) -> bool: ...
+    def read_text(self, path: str) -> str: ...
     def write_text(self, path: str, content: str) -> None: ...
     def remove_file(self, path: str) -> None: ...
 
@@ -37,6 +39,13 @@ class LocalFilesystem:
     def write_text(self, path: str, content: str) -> None:
         with open(path, "w", encoding="utf-8") as handle:
             handle.write(content)
+
+    def exists(self, path: str) -> bool:
+        return os.path.isfile(path)
+
+    def read_text(self, path: str) -> str:
+        with open(path, encoding="utf-8") as handle:
+            return handle.read()
 
     def remove_file(self, path: str) -> None:
         try:
@@ -123,6 +132,71 @@ def apply_site_config(
     }
 
 
+def disable_site_config(
+    payload: dict[str, Any],
+    *,
+    filesystem: Filesystem | None = None,
+    command_runner: CommandRunner | None = None,
+) -> dict[str, Any]:
+    fs = filesystem or LocalFilesystem()
+    runner = command_runner or LocalCommandRunner()
+    request = _validated_disable_request(payload)
+    steps: list[str] = []
+
+    if not fs.exists(request["target_config_path"]):
+        return {
+            "status": "missing_config",
+            "disabled": False,
+            "rolled_back": False,
+            "reloaded": False,
+            "steps": [f"missing_config:{request['target_config_path']}"],
+            "validation": None,
+            "reload": None,
+        }
+
+    original_config = fs.read_text(request["target_config_path"])
+    fs.remove_file(request["target_config_path"])
+    steps.append(f"removed_config:{request['target_config_path']}")
+
+    validation = runner.run(["nginx", "-t"])
+    steps.append("ran_validation:nginx -t")
+    if validation.returncode != 0:
+        fs.write_text(request["target_config_path"], original_config)
+        steps.append(f"restored_config:{request['target_config_path']}")
+        return {
+            "status": "validation_failed",
+            "disabled": False,
+            "rolled_back": True,
+            "reloaded": False,
+            "steps": steps,
+            "validation": _command_result(validation),
+            "reload": None,
+        }
+
+    reload_result = runner.run(["systemctl", "reload", "nginx"])
+    steps.append("ran_reload:systemctl reload nginx")
+    if reload_result.returncode != 0:
+        return {
+            "status": "reload_failed",
+            "disabled": False,
+            "rolled_back": False,
+            "reloaded": False,
+            "steps": steps,
+            "validation": _command_result(validation),
+            "reload": _command_result(reload_result),
+        }
+
+    return {
+        "status": "disabled",
+        "disabled": True,
+        "rolled_back": False,
+        "reloaded": True,
+        "steps": steps,
+        "validation": _command_result(validation),
+        "reload": _command_result(reload_result),
+    }
+
+
 def _validated_request(payload: dict[str, Any]) -> dict[str, str]:
     domain = _required_string(payload, "domain").lower()
     if not DOMAIN_PATTERN.fullmatch(domain):
@@ -163,6 +237,31 @@ def _validated_request(payload: dict[str, Any]) -> dict[str, str]:
         "webroot_path": webroot_path,
         "target_config_path": target_config_path,
         "config_content": config_content,
+    }
+
+
+def _validated_disable_request(payload: dict[str, Any]) -> dict[str, str]:
+    domain = _required_string(payload, "domain").lower()
+    if not DOMAIN_PATTERN.fullmatch(domain):
+        raise ValueError("Invalid domain.")
+
+    allowed_nginx_base = _safe_base(
+        payload.get("allowed_nginx_base", DEFAULT_ALLOWED_NGINX_BASE),
+        "allowed nginx base",
+    )
+    target_config_path = _safe_child_path(
+        _required_string(payload, "target_config_path"),
+        allowed_nginx_base,
+        "target config path",
+    )
+    expected_config_path = f"{allowed_nginx_base}/{domain}.conf"
+    if target_config_path != expected_config_path:
+        raise ValueError("Target config path must match the site domain under the allowed Nginx path.")
+
+    return {
+        "domain": domain,
+        "allowed_nginx_base": allowed_nginx_base,
+        "target_config_path": target_config_path,
     }
 
 

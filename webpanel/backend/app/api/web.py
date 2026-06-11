@@ -106,6 +106,24 @@ class WebSiteNginxApplyPlanRead(BaseModel):
     plan_only: bool = True
 
 
+class WebSiteDryRunRequest(BaseModel):
+    confirmation_phrase: str = Field(min_length=1)
+
+
+class WebSiteDryRunRead(BaseModel):
+    site_id: int
+    domain: str
+    config_content: str
+    target_config_path: str
+    webroot_path: str
+    directory_checks: list[str]
+    nginx_validation_command: str
+    reload_command: str
+    expected_result: str
+    executed: bool = False
+    wrote_files: bool = False
+
+
 WEB_SECTIONS = [
     WebSectionStatus(
         slug="sites",
@@ -451,6 +469,64 @@ def get_web_site_nginx_apply_plan(
     return plan
 
 
+@router.post(
+    "/web/sites/{site_id}/nginx-dry-run",
+    response_model=WebSiteDryRunRead,
+    dependencies=[Depends(require_permission("web.sites.manage"))],
+)
+def dry_run_web_site_nginx_apply(
+    site_id: int,
+    payload: WebSiteDryRunRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> WebSiteDryRunRead:
+    site = _site_or_404(db, site_id)
+    if site.provisioning_status != "ready_to_apply":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Site must be ready_to_apply before running a dry-run.",
+        )
+
+    plan = _nginx_apply_plan(site)
+    if payload.confirmation_phrase.strip() != plan.confirmation_phrase:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Confirmation phrase does not match.",
+        )
+
+    record_audit_event(
+        db,
+        action="web.site.nginx_dry_run.requested",
+        target_type="web_site",
+        target_id=str(site.id),
+        outcome="success",
+        actor_user_id=user.id,
+        metadata={
+            "domain": site.domain,
+            "dry_run": "true",
+            "executed": "false",
+        },
+    )
+    result = _nginx_dry_run(site)
+    record_audit_event(
+        db,
+        action="web.site.nginx_dry_run.completed",
+        target_type="web_site",
+        target_id=str(site.id),
+        outcome="success",
+        actor_user_id=user.id,
+        metadata={
+            "domain": site.domain,
+            "dry_run": "true",
+            "executed": "false",
+            "wrote_files": "false",
+            "expected_result": result.expected_result,
+        },
+    )
+    db.commit()
+    return result
+
+
 def _site_or_404(db: Session, site_id: int) -> WebSite:
     site = db.get(WebSite, site_id)
     if site is None:
@@ -669,6 +745,23 @@ def _nginx_apply_plan(site: WebSite) -> WebSiteNginxApplyPlanRead:
         risk_level="medium",
         confirmation_phrase=f"APPLY NGINX PLAN {site.domain}",
         plan_only=True,
+    )
+
+
+def _nginx_dry_run(site: WebSite) -> WebSiteDryRunRead:
+    plan = _nginx_apply_plan(site)
+    return WebSiteDryRunRead(
+        site_id=site.id,
+        domain=site.domain,
+        config_content=_nginx_preview(site),
+        target_config_path=plan.target_config_path,
+        webroot_path=plan.webroot_path,
+        directory_checks=[f"would ensure directory exists: {directory}" for directory in plan.required_directories],
+        nginx_validation_command=plan.validation_commands[0],
+        reload_command=plan.service_reload_command,
+        expected_result="Dry-run completed. No files, directories, commands, or services were changed.",
+        executed=False,
+        wrote_files=False,
     )
 
 

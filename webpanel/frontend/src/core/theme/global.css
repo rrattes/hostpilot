@@ -1136,6 +1136,41 @@ textarea {
   flex: 0 0 100%;
 }
 
+.dry-run-confirmation {
+  color: #c7d0dc;
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.dry-run-confirmation input {
+  background: #080d13;
+  border: 1px solid #283748;
+  border-radius: 7px;
+  color: #f4f8fb;
+  min-height: 38px;
+  padding: 0 10px;
+}
+
+.dry-run-result {
+  background: #0d141d;
+  border: 1px solid #2e7d68;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.dry-run-result > strong {
+  color: #b9f3df;
+}
+
+.dry-run-result > span {
+  color: #a4b0bd;
+  font-size: 13px;
+}
+
 .rbac-readonly-note {
   align-items: flex-start;
   background: #0d141d;

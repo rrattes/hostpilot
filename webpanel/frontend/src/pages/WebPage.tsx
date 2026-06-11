@@ -21,9 +21,11 @@ import {
   listWebSites,
   markWebSiteReadyToApply,
   previewWebSiteNginxConfig,
+  runWebSiteNginxDryRun,
   type ProvisioningStatus,
   type WebSectionStatus,
   type WebSite,
+  type WebSiteDryRunResult,
   type WebSiteNginxApplyPlan,
   type WebSiteNginxPreview,
   type WebSiteReadiness,
@@ -61,6 +63,8 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
   const [siteMessage, setSiteMessage] = useState<string | null>(null);
   const [nginxPreview, setNginxPreview] = useState<WebSiteNginxPreview | null>(null);
   const [applyPlan, setApplyPlan] = useState<WebSiteNginxApplyPlan | null>(null);
+  const [dryRunPhrase, setDryRunPhrase] = useState("");
+  const [dryRunResult, setDryRunResult] = useState<WebSiteDryRunResult | null>(null);
   const sections = useMemo(() => status?.sections ?? fallbackSections(), [status]);
 
   useEffect(() => {
@@ -203,6 +207,8 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
 
     try {
       setApplyPlan(await getWebSiteNginxApplyPlan(token, siteId));
+      setDryRunPhrase("");
+      setDryRunResult(null);
       setSiteError(null);
     } catch (planError) {
       setSiteError(
@@ -211,6 +217,24 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
           : "Unable to generate Nginx apply plan.",
       );
       setApplyPlan(null);
+    }
+  }
+
+  async function handleRunDryRun() {
+    if (!token || !applyPlan) return;
+
+    try {
+      const result = await runWebSiteNginxDryRun(token, applyPlan.site_id, dryRunPhrase);
+      setDryRunResult(result);
+      setSiteError(null);
+      setSiteMessage(`${result.domain} dry-run completed. No files, commands, or services changed.`);
+    } catch (dryRunError) {
+      setSiteError(
+        dryRunError instanceof ApiError
+          ? dryRunError.message
+          : "Unable to run Nginx dry-run.",
+      );
+      setDryRunResult(null);
     }
   }
 
@@ -500,10 +524,31 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
               <strong>Future service reload command</strong>
               <code className="path-code">{applyPlan.service_reload_command}</code>
             </div>
+            <label className="dry-run-confirmation">
+              <span>Dry-run confirmation phrase</span>
+              <input
+                onChange={(event) => setDryRunPhrase(event.target.value)}
+                placeholder={applyPlan.confirmation_phrase}
+                value={dryRunPhrase}
+              />
+            </label>
+            <button
+              className="primary-button compact"
+              disabled={dryRunPhrase !== applyPlan.confirmation_phrase}
+              onClick={handleRunDryRun}
+              type="button"
+            >
+              Run Dry-Run
+            </button>
+            {dryRunResult ? <DryRunResultPanel result={dryRunResult} /> : null}
             <div className="modal-actions">
               <button
                 className="icon-text-button"
-                onClick={() => setApplyPlan(null)}
+                onClick={() => {
+                  setApplyPlan(null);
+                  setDryRunPhrase("");
+                  setDryRunResult(null);
+                }}
                 type="button"
               >
                 Close
@@ -513,6 +558,34 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
         </div>
       ) : null}
     </section>
+  );
+}
+
+function DryRunResultPanel({ result }: { result: WebSiteDryRunResult }) {
+  return (
+    <div className="dry-run-result">
+      <strong>Dry-run result</strong>
+      <span>{result.expected_result}</span>
+      <div className="apply-plan-section">
+        <strong>Target paths</strong>
+        <code className="path-code">{result.target_config_path}</code>
+        <code className="path-code">{result.webroot_path}</code>
+      </div>
+      <div className="apply-plan-section">
+        <strong>Directory checks</strong>
+        {result.directory_checks.map((check) => (
+          <code className="path-code" key={check}>{check}</code>
+        ))}
+      </div>
+      <div className="apply-plan-section">
+        <strong>Simulated commands</strong>
+        <code className="path-code">{result.nginx_validation_command}</code>
+        <code className="path-code">{result.reload_command}</code>
+      </div>
+      <pre className="config-preview-block">
+        <code>{result.config_content}</code>
+      </pre>
+    </div>
   );
 }
 

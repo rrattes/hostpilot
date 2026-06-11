@@ -74,6 +74,20 @@ export interface WebSiteNginxApplyPlan {
   plan_only: boolean;
 }
 
+export interface WebSiteDryRunResult {
+  site_id: number;
+  domain: string;
+  config_content: string;
+  target_config_path: string;
+  webroot_path: string;
+  directory_checks: string[];
+  nginx_validation_command: string;
+  reload_command: string;
+  expected_result: string;
+  executed: boolean;
+  wrote_files: boolean;
+}
+
 export function getWebStatus(token: string) {
   return apiRequest<WebStatus>("/api/core/web/status", { token });
 }
@@ -144,5 +158,17 @@ export function markWebSiteReadyToApply(token: string, siteId: number) {
 export function getWebSiteNginxApplyPlan(token: string, siteId: number) {
   return apiRequest<WebSiteNginxApplyPlan>(`/api/core/web/sites/${siteId}/nginx-apply-plan`, {
     token,
+  });
+}
+
+export function runWebSiteNginxDryRun(
+  token: string,
+  siteId: number,
+  confirmationPhrase: string,
+) {
+  return apiRequest<WebSiteDryRunResult>(`/api/core/web/sites/${siteId}/nginx-dry-run`, {
+    method: "POST",
+    token,
+    body: { confirmation_phrase: confirmationPhrase },
   });
 }

@@ -564,3 +564,122 @@ def test_nginx_apply_plan_is_preview_only_and_audited() -> None:
         )
 
     assert audit_event.target_id == str(created["id"])
+
+
+def test_nginx_dry_run_requires_ready_to_apply_status() -> None:
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = client.post(
+        "/api/core/web/sites",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": "dry-draft.example.com",
+            "root_path": "/var/www/hostpilot-sites/dry-draft.example.com",
+            "php_runtime": "php-8.3",
+            "ssl_enabled": False,
+        },
+    ).json()
+
+    response = client.post(
+        f"/api/core/web/sites/{created['id']}/nginx-dry-run",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"confirmation_phrase": "APPLY NGINX PLAN dry-draft.example.com"},
+    )
+
+    assert response.status_code == 409
+
+
+def test_nginx_dry_run_requires_confirmation_phrase() -> None:
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = client.post(
+        "/api/core/web/sites",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": "dry-confirm.example.com",
+            "root_path": "/var/www/hostpilot-sites/dry-confirm.example.com",
+            "php_runtime": "php-8.3",
+            "ssl_enabled": False,
+        },
+    ).json()
+    client.get(
+        f"/api/core/web/sites/{created['id']}/nginx-preview",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    client.patch(
+        f"/api/core/web/sites/{created['id']}/mark-ready",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    response = client.post(
+        f"/api/core/web/sites/{created['id']}/nginx-dry-run",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"confirmation_phrase": "wrong phrase"},
+    )
+
+    assert response.status_code == 400
+
+
+def test_nginx_dry_run_simulates_apply_without_changes_and_audits() -> None:
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = client.post(
+        "/api/core/web/sites",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": "dry.example.com",
+            "root_path": "/var/www/hostpilot-sites/dry.example.com",
+            "php_runtime": "php-8.3",
+            "ssl_enabled": False,
+        },
+    ).json()
+    client.get(
+        f"/api/core/web/sites/{created['id']}/nginx-preview",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    client.patch(
+        f"/api/core/web/sites/{created['id']}/mark-ready",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    response = client.post(
+        f"/api/core/web/sites/{created['id']}/nginx-dry-run",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"confirmation_phrase": "APPLY NGINX PLAN dry.example.com"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["site_id"] == created["id"]
+    assert payload["domain"] == "dry.example.com"
+    assert "server_name dry.example.com;" in payload["config_content"]
+    assert payload["target_config_path"] == "/etc/nginx/sites-available/dry.example.com.conf"
+    assert payload["webroot_path"] == "/var/www/hostpilot-sites/dry.example.com"
+    assert payload["directory_checks"] == [
+        "would ensure directory exists: /var/www/hostpilot-sites/dry.example.com",
+        "would ensure directory exists: /etc/nginx/sites-available",
+        "would ensure directory exists: /etc/nginx/sites-enabled",
+        "would ensure directory exists: /var/log/nginx/hostpilot",
+    ]
+    assert payload["nginx_validation_command"] == "nginx -t"
+    assert payload["reload_command"] == "systemctl reload nginx"
+    assert payload["executed"] is False
+    assert payload["wrote_files"] is False
+
+    with TestingSessionLocal() as db:
+        audit_actions = [
+            row[0]
+            for row in db.query(AuditEvent.action)
+            .filter(
+                AuditEvent.target_type == "web_site",
+                AuditEvent.target_id == str(created["id"]),
+                AuditEvent.action.like("web.site.nginx_dry_run%"),
+            )
+            .order_by(AuditEvent.id)
+            .all()
+        ]
+
+    assert audit_actions == [
+        "web.site.nginx_dry_run.requested",
+        "web.site.nginx_dry_run.completed",
+    ]

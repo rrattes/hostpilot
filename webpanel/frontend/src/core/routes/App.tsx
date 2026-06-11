@@ -218,7 +218,11 @@ function renderProtectedPage(
       webModule.state !== "locked";
 
     return canOpenWeb ? (
-      <WebPage moduleState={webModule.state} />
+      <WebPage
+        canManageSites={hasPermission("web.sites.manage")}
+        canViewSites={hasPermission("web.sites.view")}
+        moduleState={webModule.state}
+      />
     ) : (
       <DashboardPage
         agentStatus={agentStatus}

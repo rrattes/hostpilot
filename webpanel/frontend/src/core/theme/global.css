@@ -674,6 +674,7 @@ textarea {
 .account-password-form input,
 .user-create-panel input,
 .user-create-panel select,
+.web-site-form input,
 .inline-control select,
 .password-reset-row input {
   background: #080d13;
@@ -697,6 +698,7 @@ textarea {
 .account-password-form input:disabled,
 .user-create-panel input:disabled,
 .user-create-panel select:disabled,
+.web-site-form input:disabled,
 .inline-control select:disabled,
 .password-reset-row input:disabled {
   color: #8f9dad;
@@ -939,6 +941,60 @@ textarea {
   align-self: end;
   min-width: 0;
   text-align: left;
+}
+
+.web-sites-registry {
+  display: grid;
+  gap: 12px;
+}
+
+.web-site-form {
+  align-items: end;
+  background: #0d141d;
+  border: 1px solid #223041;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(160px, 1fr) minmax(220px, 1.2fr) minmax(120px, 0.75fr) minmax(120px, 0.55fr) auto;
+  padding: 14px;
+}
+
+.web-site-form label {
+  color: #c7d0dc;
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.web-ssl-toggle {
+  color: #aebaca !important;
+}
+
+.web-sites-table td strong,
+.web-sites-table td span {
+  display: block;
+}
+
+.web-sites-table td strong {
+  color: #eef4f8;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.web-sites-table td span {
+  color: #8f9dad;
+  font-size: 12px;
+}
+
+.web-site-status.config_pending {
+  border-color: #856a2a;
+  color: #f2d58b;
+}
+
+.web-site-status.disabled {
+  border-color: #7c2c3b;
+  color: #ffc7d0;
 }
 
 .rbac-readonly-note {
@@ -1486,6 +1542,11 @@ textarea {
   }
 
   .user-create-panel {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .web-site-form {
     align-items: stretch;
     grid-template-columns: 1fr;
   }

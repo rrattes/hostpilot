@@ -1,0 +1,113 @@
+"""web sites registry
+
+Revision ID: 20260611_0011
+Revises: 20260611_0010
+Create Date: 2026-06-11
+"""
+
+from collections.abc import Sequence
+
+from alembic import op
+import sqlalchemy as sa
+
+
+revision: str = "20260611_0011"
+down_revision: str | None = "20260611_0010"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+timestamp = sa.text("CURRENT_TIMESTAMP")
+
+PERMISSIONS = [
+    ("web.sites.view", "View Web site registry records."),
+    ("web.sites.manage", "Create and disable Web site registry records."),
+]
+
+
+def upgrade() -> None:
+    op.create_table(
+        "web_sites",
+        sa.Column("id", sa.Integer(), primary_key=True),
+        sa.Column("domain", sa.String(length=255), nullable=False),
+        sa.Column("root_path", sa.Text(), nullable=False),
+        sa.Column("status", sa.String(length=40), nullable=False, server_default="config_pending"),
+        sa.Column("php_runtime", sa.String(length=80), nullable=False, server_default="none"),
+        sa.Column("ssl_enabled", sa.Boolean(), nullable=False, server_default=sa.false()),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=timestamp),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=timestamp),
+    )
+    op.create_index("ix_web_sites_domain", "web_sites", ["domain"], unique=True)
+    op.create_index("ix_web_sites_status", "web_sites", ["status"])
+
+    connection = op.get_bind()
+    permissions_table = sa.table(
+        "permissions",
+        sa.column("slug", sa.String),
+        sa.column("description", sa.String),
+    )
+    existing_permissions = set(
+        connection.execute(sa.text("select slug from permissions")).scalars().all()
+    )
+    inserts = [
+        {"slug": slug, "description": description}
+        for slug, description in PERMISSIONS
+        if slug not in existing_permissions
+    ]
+    if inserts:
+        op.bulk_insert(permissions_table, inserts)
+
+    role_ids = dict(connection.execute(sa.text("select slug, id from roles")).all())
+    permission_ids = dict(connection.execute(sa.text("select slug, id from permissions")).all())
+    existing_pairs = set(
+        connection.execute(sa.text("select role_id, permission_id from role_permissions")).all()
+    )
+    role_permissions_table = sa.table(
+        "role_permissions",
+        sa.column("role_id", sa.Integer),
+        sa.column("permission_id", sa.Integer),
+    )
+    role_permission_slugs = {
+        "admin": ["web.sites.view", "web.sites.manage"],
+        "operator": ["web.sites.view", "web.sites.manage"],
+        "viewer": ["web.sites.view"],
+    }
+    pairs = []
+    for role_slug, permission_slugs in role_permission_slugs.items():
+        role_id = role_ids.get(role_slug)
+        if role_id is None:
+            continue
+        for permission_slug in permission_slugs:
+            permission_id = permission_ids.get(permission_slug)
+            if permission_id is not None and (role_id, permission_id) not in existing_pairs:
+                pairs.append({"role_id": role_id, "permission_id": permission_id})
+    if pairs:
+        op.bulk_insert(role_permissions_table, pairs)
+
+
+def downgrade() -> None:
+    connection = op.get_bind()
+    permission_slugs = [permission[0] for permission in PERMISSIONS]
+    permission_ids = connection.execute(
+        sa.text("select id from permissions where slug in :slugs").bindparams(
+            sa.bindparam("slugs", expanding=True)
+        ),
+        {"slugs": permission_slugs},
+    ).scalars().all()
+    if permission_ids:
+        connection.execute(
+            sa.text("delete from role_permissions where permission_id in :ids").bindparams(
+                sa.bindparam("ids", expanding=True)
+            ),
+            {"ids": permission_ids},
+        )
+        connection.execute(
+            sa.text("delete from permissions where id in :ids").bindparams(
+                sa.bindparam("ids", expanding=True)
+            ),
+            {"ids": permission_ids},
+        )
+
+    op.drop_index("ix_web_sites_status", table_name="web_sites")
+    op.drop_index("ix_web_sites_domain", table_name="web_sites")
+    op.drop_table("web_sites")

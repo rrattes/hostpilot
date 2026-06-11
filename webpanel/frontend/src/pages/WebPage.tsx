@@ -3,6 +3,7 @@ import {
   FileText,
   Globe2,
   Lock,
+  Plus,
   ScrollText,
   ServerCog,
   ShieldAlert,
@@ -10,7 +11,15 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import { getWebStatus, type WebSectionStatus, type WebStatus } from "../core/api/web";
+import {
+  createWebSite,
+  disableWebSite,
+  getWebStatus,
+  listWebSites,
+  type WebSectionStatus,
+  type WebSite,
+  type WebStatus,
+} from "../core/api/web";
 import { useAuth } from "../core/auth/AuthProvider";
 
 const sectionIcons = {
@@ -22,13 +31,22 @@ const sectionIcons = {
 };
 
 interface WebPageProps {
+  canManageSites: boolean;
+  canViewSites: boolean;
   moduleState: string;
 }
 
-export function WebPage({ moduleState }: WebPageProps) {
+export function WebPage({ canManageSites, canViewSites, moduleState }: WebPageProps) {
   const { token } = useAuth();
   const [status, setStatus] = useState<WebStatus | null>(null);
+  const [sites, setSites] = useState<WebSite[]>([]);
+  const [domain, setDomain] = useState("");
+  const [rootPath, setRootPath] = useState("");
+  const [phpRuntime, setPhpRuntime] = useState("none");
+  const [sslEnabled, setSslEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [siteError, setSiteError] = useState<string | null>(null);
+  const [siteMessage, setSiteMessage] = useState<string | null>(null);
   const sections = useMemo(() => status?.sections ?? fallbackSections(), [status]);
 
   useEffect(() => {
@@ -41,6 +59,61 @@ export function WebPage({ moduleState }: WebPageProps) {
       })
       .catch(() => setError("Unable to load Web module scaffold status."));
   }, [token]);
+
+  async function loadSites() {
+    if (!token || !canViewSites) {
+      setSites([]);
+      return;
+    }
+
+    try {
+      setSites(await listWebSites(token));
+      setSiteError(null);
+    } catch {
+      setSiteError("Unable to load Web site registry records.");
+    }
+  }
+
+  useEffect(() => {
+    void loadSites();
+  }, [canViewSites, token]);
+
+  async function handleCreateSite() {
+    if (!token || !canManageSites) return;
+
+    try {
+      const created = await createWebSite(token, {
+        domain,
+        root_path: rootPath,
+        php_runtime: phpRuntime,
+        ssl_enabled: sslEnabled,
+      });
+      setSites((current) => [...current, created].sort((a, b) => a.domain.localeCompare(b.domain)));
+      setDomain("");
+      setRootPath("");
+      setPhpRuntime("none");
+      setSslEnabled(false);
+      setSiteError(null);
+      setSiteMessage(`${created.domain} recorded as config pending. No files or services were changed.`);
+    } catch {
+      setSiteError("Unable to create Web site record.");
+      setSiteMessage(null);
+    }
+  }
+
+  async function handleDisableSite(siteId: number) {
+    if (!token || !canManageSites) return;
+
+    try {
+      const disabled = await disableWebSite(token, siteId);
+      setSites((current) => current.map((site) => (site.id === disabled.id ? disabled : site)));
+      setSiteError(null);
+      setSiteMessage(`${disabled.domain} disabled as a registry record only.`);
+    } catch {
+      setSiteError("Unable to disable Web site record.");
+      setSiteMessage(null);
+    }
+  }
 
   return (
     <section className="data-page web-page" aria-label="Web module">
@@ -102,6 +175,130 @@ export function WebPage({ moduleState }: WebPageProps) {
           <WebSectionCard key={section.slug} section={section} />
         ))}
       </div>
+
+      <section className="web-sites-registry" aria-label="Web sites registry">
+        <div className="dashboard-section-heading compact">
+          <div>
+            <span className="eyebrow">Records only</span>
+            <h2>Sites</h2>
+          </div>
+          <span className="section-chip">
+            <Lock size={14} />
+            Not provisioned yet
+          </span>
+        </div>
+
+        {siteError ? <div className="login-error">{siteError}</div> : null}
+        {siteMessage ? <div className="success-message">{siteMessage}</div> : null}
+
+        <div className="web-site-form">
+          <label>
+            <span>Domain</span>
+            <input
+              disabled={!canManageSites}
+              onChange={(event) => setDomain(event.target.value)}
+              placeholder="example.com"
+              value={domain}
+            />
+          </label>
+          <label>
+            <span>Root path</span>
+            <input
+              disabled={!canManageSites}
+              onChange={(event) => setRootPath(event.target.value)}
+              placeholder="/srv/www/example.com"
+              value={rootPath}
+            />
+          </label>
+          <label>
+            <span>PHP runtime</span>
+            <input
+              disabled={!canManageSites}
+              onChange={(event) => setPhpRuntime(event.target.value)}
+              value={phpRuntime}
+            />
+          </label>
+          <label className="checkbox-row web-ssl-toggle">
+            <input
+              checked={sslEnabled}
+              disabled={!canManageSites}
+              onChange={(event) => setSslEnabled(event.target.checked)}
+              type="checkbox"
+            />
+            <span>SSL flag only</span>
+          </label>
+          <button
+            className="primary-button compact"
+            disabled={!canManageSites || !domain.trim() || !rootPath.trim()}
+            onClick={handleCreateSite}
+            type="button"
+          >
+            <Plus size={16} />
+            Add Record
+          </button>
+        </div>
+
+        <div className="data-table-wrap">
+          <table className="data-table web-sites-table">
+            <thead>
+              <tr>
+                <th>Domain</th>
+                <th>Status</th>
+                <th>Root path</th>
+                <th>Runtime</th>
+                <th>SSL</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!canViewSites ? (
+                <tr>
+                  <td colSpan={6}>
+                    <span className="empty-table-note">Web site registry is hidden by RBAC.</span>
+                  </td>
+                </tr>
+              ) : sites.length === 0 ? (
+                <tr>
+                  <td colSpan={6}>
+                    <span className="empty-table-note">No Web site records exist yet.</span>
+                  </td>
+                </tr>
+              ) : (
+                sites.map((site) => (
+                  <tr key={site.id}>
+                    <td>
+                      <strong>{site.domain}</strong>
+                      <span>not provisioned yet</span>
+                    </td>
+                    <td>
+                      <span className={`state-pill web-site-status ${site.status}`}>
+                        <Lock size={14} />
+                        {site.status === "config_pending" ? "Config pending" : site.status}
+                      </span>
+                    </td>
+                    <td>
+                      <code className="path-code">{site.root_path}</code>
+                    </td>
+                    <td>{site.php_runtime}</td>
+                    <td>{site.ssl_enabled ? "Flagged" : "Off"}</td>
+                    <td>
+                      <button
+                        className="icon-text-button state-disabled"
+                        disabled={!canManageSites || site.status === "disabled"}
+                        onClick={() => handleDisableSite(site.id)}
+                        type="button"
+                      >
+                        <Lock size={15} />
+                        Disable record
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </section>
   );
 }

@@ -7,7 +7,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.auth.security import create_access_token
 from app.db.base import Base
-from app.db.models import Module, Permission, Role, User
+from app.db.models import AuditEvent, Module, Permission, Role, User, WebSite
 from app.db.session import get_db
 from app.main import app
 
@@ -94,5 +94,79 @@ def test_web_status_requires_web_view_permission() -> None:
     client = TestClient(app)
 
     response = client.get("/api/core/web/status", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 403
+
+
+def test_web_sites_registry_create_list_get_and_disable() -> None:
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+
+    create_response = client.post(
+        "/api/core/web/sites",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": "Example.COM",
+            "root_path": "/srv/www/example.com",
+            "php_runtime": "php-8.3",
+            "ssl_enabled": False,
+        },
+    )
+
+    assert create_response.status_code == 201
+    created = create_response.json()
+    assert created["domain"] == "example.com"
+    assert created["root_path"] == "/srv/www/example.com"
+    assert created["status"] == "config_pending"
+    assert created["php_runtime"] == "php-8.3"
+    assert created["ssl_enabled"] is False
+
+    list_response = client.get("/api/core/web/sites", headers={"Authorization": f"Bearer {token}"})
+    assert list_response.status_code == 200
+    assert [site["domain"] for site in list_response.json()] == ["example.com"]
+
+    get_response = client.get(
+        f"/api/core/web/sites/{created['id']}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert get_response.status_code == 200
+    assert get_response.json()["domain"] == "example.com"
+
+    disable_response = client.patch(
+        f"/api/core/web/sites/{created['id']}/disable",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert disable_response.status_code == 200
+    assert disable_response.json()["status"] == "disabled"
+
+    with TestingSessionLocal() as db:
+        site = db.get(WebSite, created["id"])
+        audit_actions = [
+            row[0]
+            for row in db.query(AuditEvent.action)
+            .filter(AuditEvent.target_type == "web_site")
+            .order_by(AuditEvent.id)
+            .all()
+        ]
+
+    assert site is not None
+    assert site.status == "disabled"
+    assert audit_actions == ["web.site.created", "web.site.disabled"]
+
+
+def test_web_sites_create_requires_manage_permission() -> None:
+    token = _token_with_permissions(["web.sites.view"])
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/core/web/sites",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": "example.com",
+            "root_path": "/srv/www/example.com",
+            "php_runtime": "none",
+            "ssl_enabled": False,
+        },
+    )
 
     assert response.status_code == 403

@@ -1011,6 +1011,65 @@ textarea {
   color: #ffc7d0;
 }
 
+.workflow-badge {
+  border: 1px solid #445568;
+  border-radius: 999px;
+  color: #c7d0dc !important;
+  display: inline-block !important;
+  font-size: 11px !important;
+  font-weight: 800;
+  margin-top: 6px;
+  padding: 4px 8px;
+}
+
+.workflow-badge.draft {
+  border-color: #445568;
+}
+
+.workflow-badge.config_previewed {
+  border-color: #856a2a;
+  color: #f2d58b !important;
+}
+
+.workflow-badge.ready_to_apply {
+  border-color: #2e7d68;
+  color: #76d4bc !important;
+}
+
+.workflow-badge.disabled,
+.workflow-badge.error {
+  border-color: #7c2c3b;
+  color: #ffc7d0 !important;
+}
+
+.readiness-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 210px;
+}
+
+.readiness-check {
+  background: #101923;
+  border: 1px solid #263546;
+  border-radius: 999px;
+  color: #9fb0c1 !important;
+  display: inline-flex !important;
+  font-size: 11px !important;
+  min-height: 23px;
+  padding: 4px 7px;
+}
+
+.readiness-check.passed {
+  border-color: #2e7d68;
+  color: #76d4bc !important;
+}
+
+.readiness-check.failed {
+  border-color: #7c2c3b;
+  color: #ffc7d0 !important;
+}
+
 .web-site-actions {
   display: flex;
   flex-wrap: wrap;

@@ -118,6 +118,7 @@ def test_web_sites_registry_create_list_get_and_disable() -> None:
     assert created["domain"] == "example.com"
     assert created["root_path"] == "/var/www/hostpilot-sites/example.com"
     assert created["status"] == "config_pending"
+    assert created["provisioning_status"] == "draft"
     assert created["php_runtime"] == "php-8.3"
     assert created["ssl_enabled"] is False
 
@@ -308,6 +309,7 @@ def test_nginx_preview_is_view_only_and_audited() -> None:
             domain="preview.example.com",
             root_path="/var/www/hostpilot-sites/preview.example.com",
             status="config_pending",
+            provisioning_status="draft",
             php_runtime="php-8.3",
             ssl_enabled=False,
         )
@@ -343,6 +345,7 @@ def test_nginx_preview_is_view_only_and_audited() -> None:
 
     assert site is not None
     assert site.status == "config_pending"
+    assert site.provisioning_status == "config_previewed"
     assert audit_event.target_id == str(site_id)
 
 
@@ -353,6 +356,7 @@ def test_nginx_preview_requires_sites_view_permission() -> None:
             domain="blocked.example.com",
             root_path="/var/www/hostpilot-sites/blocked.example.com",
             status="config_pending",
+            provisioning_status="draft",
             php_runtime="none",
             ssl_enabled=False,
         )
@@ -367,3 +371,114 @@ def test_nginx_preview_requires_sites_view_permission() -> None:
     )
 
     assert response.status_code == 403
+
+
+def test_web_site_readiness_requires_preview_before_ready() -> None:
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = client.post(
+        "/api/core/web/sites",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": "ready.example.com",
+            "root_path": "/var/www/hostpilot-sites/ready.example.com",
+            "php_runtime": "php-8.3",
+            "ssl_enabled": False,
+        },
+    ).json()
+
+    readiness = client.get(
+        f"/api/core/web/sites/{created['id']}/readiness",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    mark_ready = client.patch(
+        f"/api/core/web/sites/{created['id']}/mark-ready",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert readiness.status_code == 200
+    assert readiness.json()["ready"] is False
+    checks = {check["slug"]: check["passed"] for check in readiness.json()["checks"]}
+    assert checks == {
+        "valid_domain": True,
+        "safe_root_path": True,
+        "no_duplicate_domain": True,
+        "nginx_preview_available": False,
+        "ssl_disabled_pending": True,
+        "php_runtime_selected": True,
+    }
+    assert mark_ready.status_code == 409
+
+
+def test_web_site_can_be_marked_ready_after_preview() -> None:
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = client.post(
+        "/api/core/web/sites",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": "apply.example.com",
+            "root_path": "/var/www/hostpilot-sites/apply.example.com",
+            "php_runtime": "php-8.3",
+            "ssl_enabled": False,
+        },
+    ).json()
+
+    preview = client.get(
+        f"/api/core/web/sites/{created['id']}/nginx-preview",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    readiness = client.get(
+        f"/api/core/web/sites/{created['id']}/readiness",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    ready = client.patch(
+        f"/api/core/web/sites/{created['id']}/mark-ready",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert preview.status_code == 200
+    assert readiness.status_code == 200
+    assert readiness.json()["ready"] is True
+    assert ready.status_code == 200
+    assert ready.json()["provisioning_status"] == "ready_to_apply"
+
+    with TestingSessionLocal() as db:
+        site = db.get(WebSite, created["id"])
+        audit_event = (
+            db.query(AuditEvent)
+            .filter(AuditEvent.action == "web.site.ready_to_apply.marked")
+            .one()
+        )
+
+    assert site is not None
+    assert site.provisioning_status == "ready_to_apply"
+    assert audit_event.target_id == str(created["id"])
+
+
+def test_web_site_readiness_blocks_ssl_until_automation_exists() -> None:
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = client.post(
+        "/api/core/web/sites",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": "ssl.example.com",
+            "root_path": "/var/www/hostpilot-sites/ssl.example.com",
+            "php_runtime": "php-8.3",
+            "ssl_enabled": True,
+        },
+    ).json()
+    client.get(
+        f"/api/core/web/sites/{created['id']}/nginx-preview",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    readiness = client.get(
+        f"/api/core/web/sites/{created['id']}/readiness",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    checks = {check["slug"]: check["passed"] for check in readiness.json()["checks"]}
+    assert readiness.json()["ready"] is False
+    assert checks["ssl_disabled_pending"] is False

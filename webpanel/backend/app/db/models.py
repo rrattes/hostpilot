@@ -161,5 +161,6 @@ class WebSite(TimestampMixin, Base):
     domain: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     root_path: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(String(40), index=True, nullable=False, default="config_pending")
+    provisioning_status: Mapped[str] = mapped_column(String(40), index=True, nullable=False, default="draft")
     php_runtime: Mapped[str] = mapped_column(String(80), nullable=False, default="none")
     ssl_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

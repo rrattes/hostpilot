@@ -24,17 +24,40 @@ export interface WebSite {
   domain: string;
   root_path: string;
   status: string;
+  provisioning_status: ProvisioningStatus;
   php_runtime: string;
   ssl_enabled: boolean;
   created_at: string;
   updated_at: string;
 }
 
+export type ProvisioningStatus =
+  | "draft"
+  | "config_previewed"
+  | "ready_to_apply"
+  | "disabled"
+  | "error";
+
 export interface WebSiteNginxPreview {
   site_id: number;
   domain: string;
   config: string;
   saved: boolean;
+}
+
+export interface WebSiteReadinessCheck {
+  slug: string;
+  label: string;
+  passed: boolean;
+  detail: string;
+}
+
+export interface WebSiteReadiness {
+  site_id: number;
+  domain: string;
+  provisioning_status: ProvisioningStatus;
+  ready: boolean;
+  checks: WebSiteReadinessCheck[];
 }
 
 export function getWebStatus(token: string) {
@@ -87,6 +110,19 @@ export function disableWebSite(token: string, siteId: number) {
 
 export function previewWebSiteNginxConfig(token: string, siteId: number) {
   return apiRequest<WebSiteNginxPreview>(`/api/core/web/sites/${siteId}/nginx-preview`, {
+    token,
+  });
+}
+
+export function getWebSiteReadiness(token: string, siteId: number) {
+  return apiRequest<WebSiteReadiness>(`/api/core/web/sites/${siteId}/readiness`, {
+    token,
+  });
+}
+
+export function markWebSiteReadyToApply(token: string, siteId: number) {
+  return apiRequest<WebSite>(`/api/core/web/sites/${siteId}/mark-ready`, {
+    method: "PATCH",
     token,
   });
 }

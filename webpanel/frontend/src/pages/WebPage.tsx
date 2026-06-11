@@ -15,12 +15,16 @@ import { useEffect, useMemo, useState } from "react";
 import {
   createWebSite,
   disableWebSite,
+  getWebSiteReadiness,
   getWebStatus,
   listWebSites,
+  markWebSiteReadyToApply,
   previewWebSiteNginxConfig,
+  type ProvisioningStatus,
   type WebSectionStatus,
   type WebSite,
   type WebSiteNginxPreview,
+  type WebSiteReadiness,
   type WebStatus,
 } from "../core/api/web";
 import { ApiError } from "../core/api/client";
@@ -45,6 +49,7 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
   const { token } = useAuth();
   const [status, setStatus] = useState<WebStatus | null>(null);
   const [sites, setSites] = useState<WebSite[]>([]);
+  const [readinessBySiteId, setReadinessBySiteId] = useState<Record<number, WebSiteReadiness>>({});
   const [domain, setDomain] = useState("");
   const [rootPath, setRootPath] = useState("");
   const [phpRuntime, setPhpRuntime] = useState("none");
@@ -73,7 +78,9 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
     }
 
     try {
-      setSites(await listWebSites(token));
+      const response = await listWebSites(token);
+      setSites(response);
+      await loadReadiness(response);
       setSiteError(null);
     } catch {
       setSiteError("Unable to load Web site registry records.");
@@ -83,6 +90,18 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
   useEffect(() => {
     void loadSites();
   }, [canViewSites, token]);
+
+  async function loadReadiness(siteRecords: WebSite[]) {
+    if (!token || !canViewSites || siteRecords.length === 0) {
+      setReadinessBySiteId({});
+      return;
+    }
+
+    const entries = await Promise.all(
+      siteRecords.map(async (site) => [site.id, await getWebSiteReadiness(token, site.id)] as const),
+    );
+    setReadinessBySiteId(Object.fromEntries(entries));
+  }
 
   async function handleCreateSite() {
     if (!token || !canManageSites) return;
@@ -95,6 +114,8 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
         ssl_enabled: sslEnabled,
       });
       setSites((current) => [...current, created].sort((a, b) => a.domain.localeCompare(b.domain)));
+      const readiness = await getWebSiteReadiness(token, created.id);
+      setReadinessBySiteId((current) => ({ ...current, [created.id]: readiness }));
       setDomain("");
       setRootPath("");
       setPhpRuntime("none");
@@ -117,6 +138,8 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
     try {
       const disabled = await disableWebSite(token, siteId);
       setSites((current) => current.map((site) => (site.id === disabled.id ? disabled : site)));
+      const readiness = await getWebSiteReadiness(token, disabled.id);
+      setReadinessBySiteId((current) => ({ ...current, [disabled.id]: readiness }));
       setSiteError(null);
       setSiteMessage(`${disabled.domain} disabled as a registry record only.`);
     } catch (disableError) {
@@ -134,6 +157,13 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
 
     try {
       setNginxPreview(await previewWebSiteNginxConfig(token, siteId));
+      const readiness = await getWebSiteReadiness(token, siteId);
+      setReadinessBySiteId((current) => ({ ...current, [siteId]: readiness }));
+      setSites((current) =>
+        current.map((site) =>
+          site.id === siteId ? { ...site, provisioning_status: readiness.provisioning_status } : site,
+        ),
+      );
       setSiteError(null);
     } catch (previewError) {
       setSiteError(
@@ -142,6 +172,26 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
           : "Unable to generate Nginx config preview.",
       );
       setNginxPreview(null);
+    }
+  }
+
+  async function handleMarkReady(siteId: number) {
+    if (!token || !canManageSites) return;
+
+    try {
+      const readySite = await markWebSiteReadyToApply(token, siteId);
+      setSites((current) => current.map((site) => (site.id === readySite.id ? readySite : site)));
+      const readiness = await getWebSiteReadiness(token, siteId);
+      setReadinessBySiteId((current) => ({ ...current, [siteId]: readiness }));
+      setSiteError(null);
+      setSiteMessage(`${readySite.domain} is ready to apply. No server changes were made.`);
+    } catch (readyError) {
+      setSiteError(
+        readyError instanceof ApiError
+          ? readyError.message
+          : "Unable to mark Web site ready to apply.",
+      );
+      setSiteMessage(null);
     }
   }
 
@@ -281,19 +331,20 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                 <th>Root path</th>
                 <th>Runtime</th>
                 <th>SSL</th>
+                <th>Readiness</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {!canViewSites ? (
                 <tr>
-                  <td colSpan={6}>
+                  <td colSpan={7}>
                     <span className="empty-table-note">Web site registry is hidden by RBAC.</span>
                   </td>
                 </tr>
               ) : sites.length === 0 ? (
                 <tr>
-                  <td colSpan={6}>
+                  <td colSpan={7}>
                     <span className="empty-table-note">No Web site records exist yet.</span>
                   </td>
                 </tr>
@@ -303,6 +354,9 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                     <td>
                       <strong>{site.domain}</strong>
                       <span>not provisioned yet</span>
+                      <span className={`workflow-badge ${site.provisioning_status}`}>
+                        {workflowLabel(site.provisioning_status)}
+                      </span>
                     </td>
                     <td>
                       <span className={`state-pill web-site-status ${site.status}`}>
@@ -316,6 +370,9 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                     <td>{site.php_runtime}</td>
                     <td>{site.ssl_enabled ? "Flagged" : "Off"}</td>
                     <td>
+                      <ReadinessChecklist readiness={readinessBySiteId[site.id]} />
+                    </td>
+                    <td>
                       <div className="web-site-actions">
                         <button
                           className="icon-text-button"
@@ -325,6 +382,15 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                         >
                           <FileCode2 size={15} />
                           Preview Nginx Config
+                        </button>
+                        <button
+                          className="icon-text-button"
+                          disabled={!canManageSites || !readinessBySiteId[site.id]?.ready}
+                          onClick={() => handleMarkReady(site.id)}
+                          type="button"
+                        >
+                          <ShieldCheck size={15} />
+                          Mark Ready
                         </button>
                         <button
                           className="icon-text-button state-disabled"
@@ -373,6 +439,33 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
       ) : null}
     </section>
   );
+}
+
+function ReadinessChecklist({ readiness }: { readiness?: WebSiteReadiness }) {
+  if (!readiness) {
+    return <span className="empty-table-note">Readiness loading.</span>;
+  }
+
+  return (
+    <div className="readiness-list">
+      {readiness.checks.map((check) => (
+        <span className={`readiness-check ${check.passed ? "passed" : "failed"}`} key={check.slug}>
+          {check.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function workflowLabel(status: ProvisioningStatus) {
+  const labels: Record<ProvisioningStatus, string> = {
+    draft: "Draft",
+    config_previewed: "Previewed",
+    ready_to_apply: "Ready to Apply",
+    disabled: "Disabled",
+    error: "Error",
+  };
+  return labels[status];
 }
 
 function WebSectionCard({ section }: { section: WebSectionStatus }) {

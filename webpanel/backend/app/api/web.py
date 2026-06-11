@@ -19,6 +19,7 @@ router = APIRouter()
 
 
 SectionStatus = Literal["unavailable", "coming_soon"]
+ProvisioningStatus = Literal["draft", "config_previewed", "ready_to_apply", "disabled", "error"]
 DEFAULT_WEB_SITES_BASE_PATH = "/var/www/hostpilot-sites"
 DANGEROUS_ROOT_PATHS = {"/", "/bin", "/etc", "/home", "/usr", "/var"}
 DOMAIN_PATTERN = re.compile(
@@ -48,6 +49,7 @@ class WebSiteRead(BaseModel):
     domain: str
     root_path: str
     status: str
+    provisioning_status: ProvisioningStatus
     php_runtime: str
     ssl_enabled: bool
     created_at: datetime
@@ -73,6 +75,21 @@ class WebSiteNginxPreviewRead(BaseModel):
     domain: str
     config: str
     saved: bool = False
+
+
+class WebSiteReadinessCheck(BaseModel):
+    slug: str
+    label: str
+    passed: bool
+    detail: str
+
+
+class WebSiteReadinessRead(BaseModel):
+    site_id: int
+    domain: str
+    provisioning_status: ProvisioningStatus
+    ready: bool
+    checks: list[WebSiteReadinessCheck]
 
 
 WEB_SECTIONS = [
@@ -185,6 +202,7 @@ def create_web_site(
         domain=domain,
         root_path=root_path,
         status="config_pending",
+        provisioning_status="draft",
         php_runtime=php_runtime,
         ssl_enabled=payload.ssl_enabled,
     )
@@ -239,6 +257,8 @@ def update_web_site(
     site.root_path = root_path
     site.php_runtime = php_runtime
     site.ssl_enabled = payload.ssl_enabled
+    if site.provisioning_status not in {"disabled", "error"}:
+        site.provisioning_status = "draft"
     record_audit_event(
         db,
         action="web.site.updated",
@@ -270,7 +290,9 @@ def disable_web_site(
 ) -> WebSiteRead:
     site = _site_or_404(db, site_id)
     previous_status = site.status
+    previous_provisioning_status = site.provisioning_status
     site.status = "disabled"
+    site.provisioning_status = "disabled"
     record_audit_event(
         db,
         action="web.site.disabled",
@@ -281,6 +303,7 @@ def disable_web_site(
         metadata={
             "domain": site.domain,
             "previous_status": previous_status,
+            "previous_provisioning_status": previous_provisioning_status,
             "provisioning": "record_only",
         },
     )
@@ -301,6 +324,9 @@ def preview_web_site_nginx_config(
 ) -> WebSiteNginxPreviewRead:
     site = _site_or_404(db, site_id)
     config = _nginx_preview(site)
+    previous_status = site.provisioning_status
+    if site.provisioning_status == "draft":
+        site.provisioning_status = "config_previewed"
     record_audit_event(
         db,
         action="web.site.nginx_preview.generated",
@@ -312,6 +338,8 @@ def preview_web_site_nginx_config(
             "domain": site.domain,
             "preview_only": "true",
             "saved": "false",
+            "previous_provisioning_status": previous_status,
+            "provisioning_status": site.provisioning_status,
         },
     )
     db.commit()
@@ -321,6 +349,56 @@ def preview_web_site_nginx_config(
         config=config,
         saved=False,
     )
+
+
+@router.get(
+    "/web/sites/{site_id}/readiness",
+    response_model=WebSiteReadinessRead,
+    dependencies=[Depends(require_permission("web.sites.view"))],
+)
+def get_web_site_readiness(site_id: int, db: Session = Depends(get_db)) -> WebSiteReadinessRead:
+    site = _site_or_404(db, site_id)
+    return _readiness_read(db, site)
+
+
+@router.patch(
+    "/web/sites/{site_id}/mark-ready",
+    response_model=WebSiteRead,
+    dependencies=[Depends(require_permission("web.sites.manage"))],
+)
+def mark_web_site_ready_to_apply(
+    site_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> WebSiteRead:
+    site = _site_or_404(db, site_id)
+    readiness = _readiness_read(db, site)
+    if not readiness.ready:
+        failed = [check.label for check in readiness.checks if not check.passed]
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Site is not ready to apply: {', '.join(failed)}.",
+        )
+
+    previous_status = site.provisioning_status
+    site.provisioning_status = "ready_to_apply"
+    record_audit_event(
+        db,
+        action="web.site.ready_to_apply.marked",
+        target_type="web_site",
+        target_id=str(site.id),
+        outcome="success",
+        actor_user_id=user.id,
+        metadata={
+            "domain": site.domain,
+            "previous_provisioning_status": previous_status,
+            "provisioning_status": site.provisioning_status,
+            "provisioning": "record_only",
+        },
+    )
+    db.commit()
+    db.refresh(site)
+    return _site_read(site)
 
 
 def _site_or_404(db: Session, site_id: int) -> WebSite:
@@ -336,10 +414,108 @@ def _site_read(site: WebSite) -> WebSiteRead:
         domain=site.domain,
         root_path=site.root_path,
         status=site.status,
+        provisioning_status=site.provisioning_status,  # type: ignore[arg-type]
         php_runtime=site.php_runtime,
         ssl_enabled=site.ssl_enabled,
         created_at=site.created_at,
         updated_at=site.updated_at,
+    )
+
+
+def _readiness_read(db: Session, site: WebSite) -> WebSiteReadinessRead:
+    checks = _readiness_checks(db, site)
+    return WebSiteReadinessRead(
+        site_id=site.id,
+        domain=site.domain,
+        provisioning_status=site.provisioning_status,  # type: ignore[arg-type]
+        ready=all(check.passed for check in checks),
+        checks=checks,
+    )
+
+
+def _readiness_checks(db: Session, site: WebSite) -> list[WebSiteReadinessCheck]:
+    return [
+        _check_valid_domain(site),
+        _check_safe_root_path(db, site),
+        _check_no_duplicate_domain(db, site),
+        _check_nginx_preview_available(site),
+        _check_ssl_disabled_or_pending(site),
+        _check_php_runtime_selected(site),
+    ]
+
+
+def _check_valid_domain(site: WebSite) -> WebSiteReadinessCheck:
+    try:
+        _validate_domain(site.domain)
+        return WebSiteReadinessCheck(
+            slug="valid_domain",
+            label="Valid domain",
+            passed=True,
+            detail="Domain format is valid.",
+        )
+    except HTTPException as exc:
+        return WebSiteReadinessCheck(
+            slug="valid_domain",
+            label="Valid domain",
+            passed=False,
+            detail=str(exc.detail),
+        )
+
+
+def _check_safe_root_path(db: Session, site: WebSite) -> WebSiteReadinessCheck:
+    try:
+        _validate_root_path(site.root_path, _allowed_base_path(db))
+        return WebSiteReadinessCheck(
+            slug="safe_root_path",
+            label="Safe root path",
+            passed=True,
+            detail="Root path is inside the allowed base path.",
+        )
+    except HTTPException as exc:
+        return WebSiteReadinessCheck(
+            slug="safe_root_path",
+            label="Safe root path",
+            passed=False,
+            detail=str(exc.detail),
+        )
+
+
+def _check_no_duplicate_domain(db: Session, site: WebSite) -> WebSiteReadinessCheck:
+    duplicate = db.scalar(select(WebSite).where(WebSite.domain == site.domain, WebSite.id != site.id))
+    return WebSiteReadinessCheck(
+        slug="no_duplicate_domain",
+        label="No duplicate domain",
+        passed=duplicate is None,
+        detail="No duplicate site record found." if duplicate is None else "Another site uses this domain.",
+    )
+
+
+def _check_nginx_preview_available(site: WebSite) -> WebSiteReadinessCheck:
+    passed = site.provisioning_status in {"config_previewed", "ready_to_apply"}
+    return WebSiteReadinessCheck(
+        slug="nginx_preview_available",
+        label="Nginx preview available",
+        passed=passed,
+        detail="Nginx preview has been generated." if passed else "Generate an Nginx preview first.",
+    )
+
+
+def _check_ssl_disabled_or_pending(site: WebSite) -> WebSiteReadinessCheck:
+    return WebSiteReadinessCheck(
+        slug="ssl_disabled_pending",
+        label="SSL disabled/pending",
+        passed=not site.ssl_enabled,
+        detail="SSL is disabled or pending." if not site.ssl_enabled else "SSL automation is not available yet.",
+    )
+
+
+def _check_php_runtime_selected(site: WebSite) -> WebSiteReadinessCheck:
+    passed = bool(site.php_runtime.strip())
+    return WebSiteReadinessCheck(
+        slug="php_runtime_selected",
+        label="PHP runtime selected",
+        passed=passed,
+        detail="PHP runtime value is present." if passed else "Select a PHP runtime placeholder.",
     )
 
 

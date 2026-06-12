@@ -19,7 +19,7 @@ from app.db.session import get_db
 router = APIRouter()
 
 
-SectionStatus = Literal["unavailable", "coming_soon"]
+SectionStatus = Literal["available", "unavailable", "coming_soon"]
 ProvisioningStatus = Literal["draft", "config_previewed", "ready_to_apply", "disabled", "error"]
 DEFAULT_WEB_SITES_BASE_PATH = "/var/www/hostpilot-sites"
 DEFAULT_WEB_LOG_BASE_PATH = "/var/log/nginx/hostpilot"
@@ -211,18 +211,18 @@ WEB_SECTIONS = [
     WebSectionStatus(
         slug="sites",
         name="Sites",
-        status="coming_soon",
-        description="Website records and lifecycle workflows are not active in this scaffold.",
-        action_label="Site creation coming soon",
-        action_available=False,
+        status="available",
+        description="Create site records and open Files, Logs, and Nginx workflows from each site row.",
+        action_label="Create or select a site record",
+        action_available=True,
     ),
     WebSectionStatus(
         slug="nginx",
         name="Nginx",
-        status="unavailable",
-        description="Nginx configuration checks and file edits are intentionally disabled.",
-        action_label="Nginx actions unavailable",
-        action_available=False,
+        status="available",
+        description="Preview, plan, dry-run, apply, disable, and re-apply controlled HostPilot configs.",
+        action_label="Use Nginx actions from a site row",
+        action_available=True,
     ),
     WebSectionStatus(
         slug="ssl",
@@ -235,7 +235,7 @@ WEB_SECTIONS = [
     WebSectionStatus(
         slug="logs",
         name="Logs",
-        status="coming_soon",
+        status="available",
         description="Read-only recent access and error log tails are available per site.",
         action_label="Open logs from a site row",
         action_available=True,
@@ -265,7 +265,7 @@ def get_web_status(db: Session = Depends(get_db)) -> WebStatusRead:
         module_slug="web",
         module_state=module_state,
         enabled=enabled,
-        operational=False,
+        operational=True,
         sections=WEB_SECTIONS,
     )
 

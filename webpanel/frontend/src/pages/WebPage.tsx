@@ -425,13 +425,13 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
     <section className="data-page web-page" aria-label="Web module">
       <div className="section-heading">
         <div>
-          <span className="eyebrow">Module scaffold</span>
+          <span className="eyebrow">Web module</span>
           <h2>Web</h2>
         </div>
         <div className="page-actions">
           <span className="count-pill">
-            <Lock size={14} />
-            Actions unavailable
+            <ShieldCheck size={14} />
+            Site workflows active
           </span>
           <span className="count-pill">
             <ShieldAlert size={14} />
@@ -445,11 +445,10 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
       <div className="web-scope-note">
         <FileText size={17} />
         <div>
-          <strong>Read-only scaffold</strong>
+          <strong>Web site workflows</strong>
           <span>
-            This page manages Web site records, controlled Nginx workflows, and read-only log
-            tails only. SSL, PHP management, deploy changes, and arbitrary Agent actions remain
-            disabled.
+            This page manages Web site records, read-only Files and Logs, and controlled Nginx
+            workflows. SSL, PHP management, deploy changes, and arbitrary Agent actions remain disabled.
           </span>
         </div>
       </div>
@@ -463,7 +462,7 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
             <span className="metric-label">Module state</span>
           </div>
           <strong>{status?.module_state ?? moduleState}</strong>
-          <p>Registered as a visible scaffold while operational Web features remain disabled.</p>
+          <p>Sites, file browsing, log tails, and controlled Nginx workflows are exposed here.</p>
         </div>
         <div className="summary-panel">
           <div className="summary-panel-header">
@@ -473,7 +472,7 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
             <span className="metric-label">Operational</span>
           </div>
           <strong>{status?.operational ? "Active" : "No"}</strong>
-          <p>Controlled HostPilot Nginx workflows and bounded read-only log tails are available.</p>
+          <p>Use a site row to open Files, Logs, Preview, Plan, Dry-run, Apply, Disable, or Re-Apply.</p>
         </div>
       </div>
 
@@ -581,7 +580,9 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                 {sites.length === 0 ? (
                   <tr>
                     <td colSpan={7}>
-                      <span className="empty-table-note">No Web site records exist yet.</span>
+                      <span className="empty-table-note">
+                        Create a site record to access Files, Logs, and Nginx actions.
+                      </span>
                     </td>
                   </tr>
                 ) : (
@@ -589,7 +590,7 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                   <tr key={site.id}>
                     <td>
                       <strong>{site.domain}</strong>
-                      <span>not provisioned yet</span>
+                      <span>{siteSummaryLabel(site)}</span>
                       <span className={`workflow-badge ${site.provisioning_status}`}>
                         {workflowLabel(site.provisioning_status)}
                       </span>
@@ -645,7 +646,7 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                           type="button"
                         >
                           <FileText size={15} />
-                          View Apply Plan
+                          Apply Plan / Dry-run
                         </button>
                         <button
                           className="icon-text-button"
@@ -1266,6 +1267,15 @@ function workflowLabel(status: ProvisioningStatus) {
   return labels[status];
 }
 
+function siteSummaryLabel(site: WebSite) {
+  if (site.status === "applied") return "Nginx config applied";
+  if (site.status === "disabled") return "Nginx config disabled";
+  if (site.status === "error") return "Needs review";
+  if (site.provisioning_status === "ready_to_apply") return "Ready for Nginx apply";
+  if (site.provisioning_status === "config_previewed") return "Nginx preview generated";
+  return "Config pending";
+}
+
 function WebSectionCard({ section }: { section: WebSectionStatus }) {
   const Icon = sectionIcons[section.slug as keyof typeof sectionIcons] ?? FileText;
 
@@ -1276,18 +1286,23 @@ function WebSectionCard({ section }: { section: WebSectionStatus }) {
           <Icon size={17} />
         </span>
         <span className="state-pill">
-          <Lock size={14} />
-          {section.status === "coming_soon" ? "Coming soon" : "Unavailable"}
+          {section.status === "available" ? <ShieldCheck size={14} /> : <Lock size={14} />}
+          {sectionStatusLabel(section.status)}
         </span>
       </div>
       <h3>{section.name}</h3>
       <p>{section.description}</p>
-      <button className="icon-text-button state-disabled" disabled type="button">
-        <Lock size={15} />
+      <button className={`icon-text-button ${section.action_available ? "" : "state-disabled"}`} disabled type="button">
+        {section.action_available ? <ShieldCheck size={15} /> : <Lock size={15} />}
         {section.action_label}
       </button>
     </article>
   );
+}
+
+function sectionStatusLabel(status: WebSectionStatus["status"]) {
+  if (status === "available") return "Available";
+  return status === "coming_soon" ? "Coming soon" : "Unavailable";
 }
 
 function fallbackSections(): WebSectionStatus[] {
@@ -1295,18 +1310,18 @@ function fallbackSections(): WebSectionStatus[] {
     {
       slug: "sites",
       name: "Sites",
-      status: "coming_soon",
-      description: "Website records and lifecycle workflows are not active in this scaffold.",
-      action_label: "Site creation coming soon",
-      action_available: false,
+      status: "available",
+      description: "Create site records and open Files, Logs, and Nginx workflows from each site row.",
+      action_label: "Create or select a site record",
+      action_available: true,
     },
     {
       slug: "nginx",
       name: "Nginx",
-      status: "unavailable",
-      description: "Nginx configuration checks and file edits are intentionally disabled.",
-      action_label: "Nginx actions unavailable",
-      action_available: false,
+      status: "available",
+      description: "Preview, plan, dry-run, apply, disable, and re-apply controlled HostPilot configs.",
+      action_label: "Use Nginx actions from a site row",
+      action_available: true,
     },
     {
       slug: "ssl",
@@ -1319,10 +1334,10 @@ function fallbackSections(): WebSectionStatus[] {
     {
       slug: "logs",
       name: "Logs",
-      status: "coming_soon",
-      description: "Web log browsing and retention controls are placeholder-only.",
-      action_label: "Log viewer coming soon",
-      action_available: false,
+      status: "available",
+      description: "Read-only recent access and error log tails are available per site.",
+      action_label: "Open logs from a site row",
+      action_available: true,
     },
     {
       slug: "php-runtime",

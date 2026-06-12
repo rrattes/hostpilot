@@ -68,7 +68,7 @@ def _token_with_permissions(permission_slugs: list[str]) -> str:
         return create_access_token(user.id)
 
 
-def test_web_status_is_placeholder_only() -> None:
+def test_web_status_exposes_available_site_workflows() -> None:
     token = _token_with_permissions(["web.view"])
     client = TestClient(app)
 
@@ -79,7 +79,7 @@ def test_web_status_is_placeholder_only() -> None:
     assert payload["module_slug"] == "web"
     assert payload["module_state"] == "available"
     assert payload["enabled"] is False
-    assert payload["operational"] is False
+    assert payload["operational"] is True
     assert [section["slug"] for section in payload["sections"]] == [
         "sites",
         "nginx",
@@ -89,8 +89,8 @@ def test_web_status_is_placeholder_only() -> None:
     ]
     actions_by_slug = {section["slug"]: section["action_available"] for section in payload["sections"]}
     assert actions_by_slug == {
-        "sites": False,
-        "nginx": False,
+        "sites": True,
+        "nginx": True,
         "ssl": False,
         "logs": True,
         "php-runtime": False,

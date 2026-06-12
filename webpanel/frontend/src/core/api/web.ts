@@ -1,6 +1,6 @@
 import { apiRequest } from "./client";
 
-export type WebSectionStatusValue = "unavailable" | "coming_soon";
+export type WebSectionStatusValue = "available" | "unavailable" | "coming_soon";
 
 export interface WebSectionStatus {
   slug: string;

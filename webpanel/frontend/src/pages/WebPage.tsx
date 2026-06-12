@@ -1,7 +1,9 @@
 import {
   Braces,
+  File,
   FileCode2,
   FileText,
+  FolderOpen,
   Globe2,
   Lock,
   Plus,
@@ -19,6 +21,7 @@ import {
   disableWebSite,
   disableWebSiteNginxConfig,
   getWebSiteNginxApplyPlan,
+  getWebSiteFiles,
   getWebSiteLogs,
   getWebSiteReadiness,
   getWebStatus,
@@ -33,6 +36,8 @@ import {
   type WebSiteApplyResult,
   type WebSiteDisableResult,
   type WebSiteDryRunResult,
+  type WebSiteFileEntry,
+  type WebSiteFiles,
   type WebSiteLogFile,
   type WebSiteLogs,
   type WebSiteNginxApplyPlan,
@@ -86,6 +91,11 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
   const [logsTarget, setLogsTarget] = useState<WebSite | null>(null);
   const [logsResult, setLogsResult] = useState<WebSiteLogs | null>(null);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [filesTarget, setFilesTarget] = useState<WebSite | null>(null);
+  const [filesResult, setFilesResult] = useState<WebSiteFiles | null>(null);
+  const [filesLoading, setFilesLoading] = useState(false);
+  const [filesSubpath, setFilesSubpath] = useState("");
+  const [filesPage, setFilesPage] = useState(1);
   const sections = useMemo(() => status?.sections ?? fallbackSections(), [status]);
 
   useEffect(() => {
@@ -372,6 +382,41 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
     }
   }
 
+  async function handleViewFiles(site: WebSite) {
+    setFilesTarget(site);
+    setFilesSubpath("");
+    setFilesPage(1);
+    await refreshFiles(site, "", 1);
+  }
+
+  async function refreshFiles(site = filesTarget, subpath = filesSubpath, page = filesPage) {
+    if (!token || !site || !canViewSites) return;
+
+    try {
+      setFilesLoading(true);
+      const result = await getWebSiteFiles(token, site.id, subpath, page, 50);
+      setFilesResult(result);
+      setFilesSubpath(result.relative_subpath);
+      setFilesPage(result.page);
+      setSiteError(null);
+    } catch (filesError) {
+      setSiteError(
+        filesError instanceof ApiError
+          ? filesError.message
+          : "Unable to load Web site files.",
+      );
+      setFilesResult(null);
+    } finally {
+      setFilesLoading(false);
+    }
+  }
+
+  function navigateFiles(subpath: string, page = 1) {
+    setFilesSubpath(subpath);
+    setFilesPage(page);
+    void refreshFiles(filesTarget, subpath, page);
+  }
+
   return (
     <section className="data-page web-page" aria-label="Web module">
       <div className="section-heading">
@@ -587,6 +632,15 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                         >
                           <ScrollText size={15} />
                           Logs
+                        </button>
+                        <button
+                          className="icon-text-button"
+                          disabled={!canViewSites}
+                          onClick={() => handleViewFiles(site)}
+                          type="button"
+                        >
+                          <FolderOpen size={15} />
+                          Files
                         </button>
                         <button
                           className="icon-text-button state-disabled"
@@ -902,6 +956,89 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
           </section>
         </div>
       ) : null}
+
+      {filesTarget ? (
+        <div className="modal-backdrop" role="presentation">
+          <section className="confirm-modal nginx-preview-modal" aria-label="Web site files">
+            <div>
+              <span className="eyebrow">Read-only files</span>
+              <h2>{filesTarget.domain}</h2>
+            </div>
+            <p>
+              Directory metadata under the site root only. No file contents, uploads, edits,
+              deletes, permission changes, or shell access are available.
+            </p>
+            <div className="apply-plan-section">
+              <strong>Current path</strong>
+              <code className="path-code">{filesResult?.target_path ?? filesTarget.root_path}</code>
+            </div>
+            <FileBreadcrumb subpath={filesSubpath} onNavigate={navigateFiles} />
+            <div className="modal-actions">
+              <button
+                className="icon-text-button"
+                disabled={filesLoading}
+                onClick={() => refreshFiles()}
+                type="button"
+              >
+                <RefreshCw size={15} />
+                Refresh
+              </button>
+            </div>
+            {filesLoading ? <span className="empty-table-note">Loading files.</span> : null}
+            {filesResult ? (
+              <FileBrowserTable
+                entries={filesResult.entries}
+                onOpenDirectory={(entry) => navigateFiles(entry.relative_path)}
+              />
+            ) : !filesLoading ? (
+              <span className="empty-table-note">No file listing loaded.</span>
+            ) : null}
+            {filesResult ? (
+              <div className="apply-plan-section">
+                <strong>Listing state</strong>
+                <code className="path-code">job #{filesResult.job_id}</code>
+                <code className="path-code">{filesResult.status}</code>
+                <code className="path-code">{filesResult.total_entries} entries</code>
+                <code className="path-code">depth {filesResult.max_depth}</code>
+              </div>
+            ) : null}
+            {filesResult ? (
+              <div className="modal-actions">
+                <button
+                  className="icon-text-button"
+                  disabled={filesPage <= 1 || filesLoading}
+                  onClick={() => navigateFiles(filesSubpath, filesPage - 1)}
+                  type="button"
+                >
+                  Previous
+                </button>
+                <button
+                  className="icon-text-button"
+                  disabled={!filesResult.has_next || filesLoading}
+                  onClick={() => navigateFiles(filesSubpath, filesPage + 1)}
+                  type="button"
+                >
+                  Next
+                </button>
+              </div>
+            ) : null}
+            <div className="modal-actions">
+              <button
+                className="icon-text-button"
+                onClick={() => {
+                  setFilesTarget(null);
+                  setFilesResult(null);
+                  setFilesSubpath("");
+                  setFilesPage(1);
+                }}
+                type="button"
+              >
+                Close
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -991,6 +1128,91 @@ function LogViewer({ title, log }: { title: string; log: WebSiteLogFile }) {
       )}
     </div>
   );
+}
+
+function FileBreadcrumb({
+  subpath,
+  onNavigate,
+}: {
+  subpath: string;
+  onNavigate: (subpath: string) => void;
+}) {
+  const parts = subpath ? subpath.split("/") : [];
+  return (
+    <div className="file-breadcrumb">
+      <button className="icon-text-button" onClick={() => onNavigate("")} type="button">
+        Root
+      </button>
+      {parts.map((part, index) => {
+        const path = parts.slice(0, index + 1).join("/");
+        return (
+          <button className="icon-text-button" key={path} onClick={() => onNavigate(path)} type="button">
+            {part}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function FileBrowserTable({
+  entries,
+  onOpenDirectory,
+}: {
+  entries: WebSiteFileEntry[];
+  onOpenDirectory: (entry: WebSiteFileEntry) => void;
+}) {
+  if (entries.length === 0) {
+    return <span className="empty-table-note">Directory is empty or missing.</span>;
+  }
+
+  return (
+    <div className="data-table-wrap">
+      <table className="data-table web-files-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Size</th>
+            <th>Modified</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry) => (
+            <tr key={entry.relative_path}>
+              <td>
+                {entry.type === "directory" ? (
+                  <button className="icon-text-button" onClick={() => onOpenDirectory(entry)} type="button">
+                    <FolderOpen size={15} />
+                    {entry.name}
+                  </button>
+                ) : (
+                  <span className="file-entry-name">
+                    <File size={15} />
+                    {entry.name}
+                  </span>
+                )}
+              </td>
+              <td>{entry.type}</td>
+              <td>{formatFileSize(entry.size)}</td>
+              <td>{formatModifiedTime(entry.modified_at)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function formatFileSize(size: number) {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatModifiedTime(timestamp: number) {
+  if (!timestamp) return "Unknown";
+  return new Date(timestamp * 1000).toLocaleString();
 }
 
 function PlanFact({ label, value, wide = false }: { label: string; value: string; wide?: boolean }) {

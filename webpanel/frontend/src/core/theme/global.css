@@ -1148,6 +1148,24 @@ textarea {
   min-width: 0;
 }
 
+.file-breadcrumb,
+.file-entry-name {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.file-entry-name {
+  color: #c7d0dc;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.web-files-table td:first-child {
+  min-width: 220px;
+}
+
 .dry-run-confirmation {
   color: #c7d0dc;
   display: grid;

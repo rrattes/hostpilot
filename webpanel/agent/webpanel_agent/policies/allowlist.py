@@ -1,6 +1,7 @@
 ALLOWED_ACTIONS = {
     "mock.health",
     "mock.system_info",
+    "web.files.list_site_files",
     "web.nginx.apply_site_config",
     "web.nginx.disable_site_config",
     "web.logs.tail_site_logs",

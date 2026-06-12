@@ -7,6 +7,7 @@ from app.core.agent_gateway.contracts import AgentActionRequest, AgentActionResp
 ALLOWED_MOCK_ACTIONS = {
     "mock.health",
     "mock.system_info",
+    "web.files.list_site_files",
     "web.nginx.apply_site_config",
     "web.nginx.disable_site_config",
     "web.logs.tail_site_logs",
@@ -65,6 +66,15 @@ def run_mock_action(request: AgentActionRequest) -> AgentActionResponse:
             "rejected",
             {},
             "Local agent is required for Web site log access.",
+            started_at,
+        )
+
+    if request.action == "web.files.list_site_files":
+        return _response(
+            False,
+            "rejected",
+            {},
+            "Local agent is required for Web site file listing.",
             started_at,
         )
 

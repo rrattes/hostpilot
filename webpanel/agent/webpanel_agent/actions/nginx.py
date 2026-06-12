@@ -10,6 +10,7 @@ DEFAULT_ALLOWED_WEBROOT_BASE = "/var/www/hostpilot-sites"
 DEFAULT_ALLOWED_NGINX_BASE = "/etc/nginx/sites-available/hostpilot"
 DEFAULT_ALLOWED_LOG_BASE = "/var/log/nginx/hostpilot"
 MAX_LOG_LINES = 500
+MAX_FILE_PAGE_SIZE = 100
 DOMAIN_PATTERN = re.compile(
     r"^(?=.{1,253}$)(?!-)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
 )
@@ -18,6 +19,8 @@ DOMAIN_PATTERN = re.compile(
 class Filesystem(Protocol):
     def makedirs(self, path: str) -> None: ...
     def exists(self, path: str) -> bool: ...
+    def is_dir(self, path: str) -> bool: ...
+    def list_dir(self, path: str) -> list["FileEntry"]: ...
     def read_text(self, path: str) -> str: ...
     def write_text(self, path: str, content: str) -> None: ...
     def remove_file(self, path: str) -> None: ...
@@ -34,6 +37,14 @@ class CommandResult:
     stderr: str = ""
 
 
+@dataclass(frozen=True)
+class FileEntry:
+    name: str
+    is_dir: bool
+    size: int
+    modified_at: float
+
+
 class LocalFilesystem:
     def makedirs(self, path: str) -> None:
         os.makedirs(path, exist_ok=True)
@@ -44,6 +55,23 @@ class LocalFilesystem:
 
     def exists(self, path: str) -> bool:
         return os.path.isfile(path)
+
+    def is_dir(self, path: str) -> bool:
+        return os.path.isdir(path)
+
+    def list_dir(self, path: str) -> list[FileEntry]:
+        entries: list[FileEntry] = []
+        for entry in os.scandir(path):
+            stat = entry.stat(follow_symlinks=False)
+            entries.append(
+                FileEntry(
+                    name=entry.name,
+                    is_dir=entry.is_dir(follow_symlinks=False),
+                    size=stat.st_size,
+                    modified_at=stat.st_mtime,
+                )
+            )
+        return entries
 
     def read_text(self, path: str) -> str:
         with open(path, encoding="utf-8") as handle:
@@ -219,6 +247,57 @@ def tail_site_logs(
     }
 
 
+def list_site_files(
+    payload: dict[str, Any],
+    *,
+    filesystem: Filesystem | None = None,
+) -> dict[str, Any]:
+    fs = filesystem or LocalFilesystem()
+    request = _validated_files_request(payload)
+    if not fs.is_dir(request["target_path"]):
+        return {
+            "status": "missing_directory",
+            "root_path": request["root_path"],
+            "relative_subpath": request["relative_subpath"],
+            "target_path": request["target_path"],
+            "page": request["page"],
+            "page_size": request["page_size"],
+            "max_depth": 1,
+            "total_entries": 0,
+            "has_next": False,
+            "entries": [],
+        }
+
+    entries = sorted(
+        fs.list_dir(request["target_path"]),
+        key=lambda entry: (not entry.is_dir, entry.name.lower()),
+    )
+    total_entries = len(entries)
+    start = (request["page"] - 1) * request["page_size"]
+    stop = start + request["page_size"]
+    return {
+        "status": "completed",
+        "root_path": request["root_path"],
+        "relative_subpath": request["relative_subpath"],
+        "target_path": request["target_path"],
+        "page": request["page"],
+        "page_size": request["page_size"],
+        "max_depth": 1,
+        "total_entries": total_entries,
+        "has_next": stop < total_entries,
+        "entries": [
+            {
+                "name": entry.name,
+                "type": "directory" if entry.is_dir else "file",
+                "size": entry.size,
+                "modified_at": entry.modified_at,
+                "relative_path": _join_relative_path(request["relative_subpath"], entry.name),
+            }
+            for entry in entries[start:stop]
+        ],
+    }
+
+
 def _validated_request(payload: dict[str, Any]) -> dict[str, str]:
     domain = _required_string(payload, "domain").lower()
     if not DOMAIN_PATTERN.fullmatch(domain):
@@ -304,6 +383,43 @@ def _validated_logs_request(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _validated_files_request(payload: dict[str, Any]) -> dict[str, Any]:
+    allowed_webroot_base = _safe_base(
+        payload.get("allowed_webroot_base", DEFAULT_ALLOWED_WEBROOT_BASE),
+        "allowed webroot base",
+    )
+    root_path = _safe_child_path(
+        _required_string(payload, "root_path"),
+        allowed_webroot_base,
+        "site root path",
+    )
+    relative_subpath = _safe_relative_path(str(payload.get("relative_subpath", "")))
+    target_path = root_path if not relative_subpath else f"{root_path}/{relative_subpath}"
+    target_path = _safe_child_path(target_path, root_path, "target path")
+
+    page = payload.get("page", 1)
+    if not isinstance(page, int) or isinstance(page, bool):
+        raise ValueError("page must be an integer.")
+    if page < 1:
+        raise ValueError("page must be at least 1.")
+
+    page_size = payload.get("page_size", 50)
+    if not isinstance(page_size, int) or isinstance(page_size, bool):
+        raise ValueError("page_size must be an integer.")
+    if page_size < 1:
+        raise ValueError("page_size must be at least 1.")
+    page_size = min(page_size, MAX_FILE_PAGE_SIZE)
+
+    return {
+        "allowed_webroot_base": allowed_webroot_base,
+        "root_path": root_path,
+        "relative_subpath": relative_subpath,
+        "target_path": target_path,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
 def _validated_disable_request(payload: dict[str, Any]) -> dict[str, str]:
     domain = _required_string(payload, "domain").lower()
     if not DOMAIN_PATTERN.fullmatch(domain):
@@ -354,6 +470,25 @@ def _safe_child_path(path: str, base: str, label: str) -> str:
     if normalized != base and not normalized.startswith(f"{base}/"):
         raise ValueError(f"{label} must stay under {base}.")
     return normalized
+
+
+def _safe_relative_path(path: str) -> str:
+    raw_value = path.strip()
+    if not raw_value:
+        return ""
+    if "\\" in raw_value or "\x00" in raw_value or raw_value.startswith("/"):
+        raise ValueError("relative_subpath must be a safe relative path.")
+    value = raw_value.strip("/")
+    normalized = posixpath.normpath(value)
+    if normalized in {"", "."}:
+        return ""
+    if normalized != value or ".." in normalized.split("/"):
+        raise ValueError("relative_subpath must not contain traversal or redundant segments.")
+    return normalized
+
+
+def _join_relative_path(base: str, name: str) -> str:
+    return name if not base else f"{base}/{name}"
 
 
 def _tail_log_file(fs: Filesystem, path: str, line_limit: int) -> dict[str, Any]:

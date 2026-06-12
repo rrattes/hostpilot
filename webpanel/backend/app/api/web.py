@@ -24,6 +24,7 @@ ProvisioningStatus = Literal["draft", "config_previewed", "ready_to_apply", "dis
 DEFAULT_WEB_SITES_BASE_PATH = "/var/www/hostpilot-sites"
 DEFAULT_WEB_LOG_BASE_PATH = "/var/log/nginx/hostpilot"
 MAX_WEB_LOG_LINES = 500
+MAX_WEB_FILE_PAGE_SIZE = 100
 DANGEROUS_ROOT_PATHS = {"/", "/bin", "/etc", "/home", "/usr", "/var"}
 DOMAIN_PATTERN = re.compile(
     r"^(?=.{1,253}$)(?!-)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
@@ -182,6 +183,30 @@ class WebSiteLogsRead(BaseModel):
     error: WebSiteLogFileRead
 
 
+class WebSiteFileEntryRead(BaseModel):
+    name: str
+    type: Literal["directory", "file"]
+    size: int
+    modified_at: float
+    relative_path: str
+
+
+class WebSiteFilesRead(BaseModel):
+    site_id: int
+    domain: str
+    root_path: str
+    relative_subpath: str
+    target_path: str
+    page: int
+    page_size: int
+    max_depth: int
+    total_entries: int
+    has_next: bool
+    status: str
+    job_id: int
+    entries: list[WebSiteFileEntryRead]
+
+
 WEB_SECTIONS = [
     WebSectionStatus(
         slug="sites",
@@ -321,6 +346,79 @@ def get_web_site_logs(
         status=response.status,
         access=_log_file_read(access_log),
         error=_log_file_read(error_log),
+    )
+
+
+@router.get(
+    "/web/sites/{site_id}/files",
+    response_model=WebSiteFilesRead,
+    dependencies=[Depends(require_permission("web.sites.view"))],
+)
+def get_web_site_files(
+    site_id: int,
+    subpath: str = Query(default=""),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=MAX_WEB_FILE_PAGE_SIZE),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> WebSiteFilesRead:
+    site = _site_or_404(db, site_id)
+    _validate_root_path(site.root_path, _allowed_base_path(db))
+    relative_subpath = _validate_relative_subpath(subpath)
+    agent_payload = _agent_files_payload(site, relative_subpath, page, page_size)
+    record_audit_event(
+        db,
+        action="web.site.files.listed",
+        target_type="web_site",
+        target_id=str(site.id),
+        outcome="success",
+        actor_user_id=user.id,
+        metadata={
+            "domain": site.domain,
+            "relative_subpath": relative_subpath,
+            "page": str(page),
+            "page_size": str(page_size),
+            "read_only": "true",
+        },
+    )
+    job, response = execute_mock_agent_action(
+        db,
+        action="web.files.list_site_files",
+        payload=agent_payload,
+        user=user,
+    )
+    if not response.success:
+        record_audit_event(
+            db,
+            action="web.site.files.list_failed",
+            target_type="web_site",
+            target_id=str(site.id),
+            outcome="failure",
+            actor_user_id=user.id,
+            metadata={"domain": site.domain, "agent_status": response.status},
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=response.error or "Unable to list Web site files.",
+        )
+
+    db.commit()
+    db.refresh(job)
+    return WebSiteFilesRead(
+        site_id=site.id,
+        domain=site.domain,
+        root_path=str(response.data.get("root_path", site.root_path)),
+        relative_subpath=str(response.data.get("relative_subpath", relative_subpath)),
+        target_path=str(response.data.get("target_path", site.root_path)),
+        page=int(response.data.get("page", page)),
+        page_size=int(response.data.get("page_size", page_size)),
+        max_depth=int(response.data.get("max_depth", 1)),
+        total_entries=int(response.data.get("total_entries", 0)),
+        has_next=bool(response.data.get("has_next", False)),
+        status=response.status,
+        job_id=job.id,
+        entries=_file_entries_read(response.data.get("entries", [])),
     )
 
 
@@ -1026,6 +1124,25 @@ def _validate_root_path(value: str, allowed_base_path: str) -> str:
     return normalized
 
 
+def _validate_relative_subpath(value: str) -> str:
+    raw_subpath = value.strip()
+    if not raw_subpath:
+        return ""
+    if "\\" in raw_subpath or "\x00" in raw_subpath or raw_subpath.startswith("/"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Subpath must be a safe relative path.",
+        )
+    subpath = raw_subpath.strip("/")
+    normalized = posixpath.normpath(subpath)
+    if normalized != subpath or ".." in normalized.split("/"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Subpath must not contain traversal or redundant path segments.",
+        )
+    return normalized
+
+
 def _nginx_preview(site: WebSite) -> str:
     php_target = _php_fpm_target(site.php_runtime)
     return f"""# HostPilot preview only - not written to disk.
@@ -1127,6 +1244,16 @@ def _agent_logs_payload(site: WebSite, lines: int) -> dict[str, object]:
     }
 
 
+def _agent_files_payload(site: WebSite, relative_subpath: str, page: int, page_size: int) -> dict[str, object]:
+    return {
+        "root_path": site.root_path,
+        "relative_subpath": relative_subpath,
+        "page": page,
+        "page_size": min(page_size, MAX_WEB_FILE_PAGE_SIZE),
+        "allowed_webroot_base": DEFAULT_WEB_SITES_BASE_PATH,
+    }
+
+
 def _log_file_read(payload: object) -> WebSiteLogFileRead:
     if not isinstance(payload, dict):
         return WebSiteLogFileRead(path="", missing=True, lines=[])
@@ -1136,6 +1263,26 @@ def _log_file_read(payload: object) -> WebSiteLogFileRead:
         missing=bool(payload.get("missing", True)),
         lines=[str(line) for line in lines] if isinstance(lines, list) else [],
     )
+
+
+def _file_entries_read(payload: object) -> list[WebSiteFileEntryRead]:
+    if not isinstance(payload, list):
+        return []
+    entries: list[WebSiteFileEntryRead] = []
+    for entry in payload:
+        if not isinstance(entry, dict):
+            continue
+        entry_type = "directory" if entry.get("type") == "directory" else "file"
+        entries.append(
+            WebSiteFileEntryRead(
+                name=str(entry.get("name", "")),
+                type=entry_type,  # type: ignore[arg-type]
+                size=int(entry.get("size", 0)),
+                modified_at=float(entry.get("modified_at", 0)),
+                relative_path=str(entry.get("relative_path", "")),
+            )
+        )
+    return entries
 
 
 def _nginx_disable_confirmation_phrase(site: WebSite) -> str:

@@ -1317,6 +1317,185 @@ def test_web_site_logs_returns_error_when_agent_rejects_unsafe_path(monkeypatch)
     assert "Access log path" in response.json()["detail"]
 
 
+def test_web_site_files_calls_agent_with_site_root_and_returns_entries(monkeypatch) -> None:
+    captured_payload: dict[str, object] | None = None
+
+    def fake_execute_agent_action(db: Session, *, action: str, payload: dict[str, object], user: User):
+        nonlocal captured_payload
+        captured_payload = payload
+        from app.db.models import Job
+
+        job = Job(
+            type="agent_action",
+            module="agent",
+            action=action,
+            status="completed",
+            payload="{}",
+            result="{}",
+        )
+        db.add(job)
+        db.flush()
+        return job, AgentActionResponse(
+            success=True,
+            status="completed",
+            data={
+                "root_path": "/var/www/hostpilot-sites/files-agent.example.com",
+                "relative_subpath": "public",
+                "target_path": "/var/www/hostpilot-sites/files-agent.example.com/public",
+                "page": 1,
+                "page_size": 50,
+                "max_depth": 1,
+                "total_entries": 2,
+                "has_next": False,
+                "entries": [
+                    {
+                        "name": "assets",
+                        "type": "directory",
+                        "size": 4096,
+                        "modified_at": 10.0,
+                        "relative_path": "public/assets",
+                    },
+                    {
+                        "name": "index.html",
+                        "type": "file",
+                        "size": 120,
+                        "modified_at": 20.0,
+                        "relative_path": "public/index.html",
+                    },
+                ],
+            },
+            error=None,
+            duration_ms=2,
+        )
+
+    monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    token = _token_with_permissions(["web.sites.view"])
+    client = TestClient(app)
+    created = _site_record("files-agent.example.com")
+
+    response = client.get(
+        f"/api/core/web/sites/{created['id']}/files?subpath=public",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["entries"][0]["name"] == "assets"
+    assert payload["entries"][1]["type"] == "file"
+    assert captured_payload == {
+        "root_path": "/var/www/hostpilot-sites/files-agent.example.com",
+        "relative_subpath": "public",
+        "page": 1,
+        "page_size": 50,
+        "allowed_webroot_base": "/var/www/hostpilot-sites",
+    }
+
+
+def test_web_site_files_rejects_traversal_before_agent(monkeypatch) -> None:
+    called = False
+
+    def fake_execute_agent_action(db: Session, *, action: str, payload: dict[str, object], user: User):
+        nonlocal called
+        called = True
+        raise AssertionError("Agent should not be called for traversal")
+
+    monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    token = _token_with_permissions(["web.sites.view"])
+    client = TestClient(app)
+    created = _site_record("files-traversal.example.com")
+
+    response = client.get(
+        f"/api/core/web/sites/{created['id']}/files?subpath=../other",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 422
+    assert called is False
+
+
+def test_web_site_files_enforces_root_boundary_before_agent(monkeypatch) -> None:
+    called = False
+
+    def fake_execute_agent_action(db: Session, *, action: str, payload: dict[str, object], user: User):
+        nonlocal called
+        called = True
+        raise AssertionError("Agent should not be called for unsafe root")
+
+    monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    token = _token_with_permissions(["web.sites.view"])
+    client = TestClient(app)
+    created = _site_record("files-root.example.com")
+    _mutate_site(created["id"], root_path="/etc")
+
+    response = client.get(
+        f"/api/core/web/sites/{created['id']}/files",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 422
+    assert called is False
+
+
+def test_web_site_files_preserves_missing_directory_state(monkeypatch) -> None:
+    def fake_execute_agent_action(db: Session, *, action: str, payload: dict[str, object], user: User):
+        from app.db.models import Job
+
+        job = Job(
+            type="agent_action",
+            module="agent",
+            action=action,
+            status="missing_directory",
+            payload="{}",
+            result="{}",
+        )
+        db.add(job)
+        db.flush()
+        return job, AgentActionResponse(
+            success=True,
+            status="missing_directory",
+            data={
+                "root_path": "/var/www/hostpilot-sites/files-missing.example.com",
+                "relative_subpath": "missing",
+                "target_path": "/var/www/hostpilot-sites/files-missing.example.com/missing",
+                "page": 1,
+                "page_size": 50,
+                "max_depth": 1,
+                "total_entries": 0,
+                "has_next": False,
+                "entries": [],
+            },
+            error=None,
+            duration_ms=2,
+        )
+
+    monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    token = _token_with_permissions(["web.sites.view"])
+    client = TestClient(app)
+    created = _site_record("files-missing.example.com")
+
+    response = client.get(
+        f"/api/core/web/sites/{created['id']}/files?subpath=missing",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "missing_directory"
+    assert response.json()["entries"] == []
+
+
+def test_web_site_files_rejects_page_size_above_max() -> None:
+    token = _token_with_permissions(["web.sites.view"])
+    client = TestClient(app)
+    created = _site_record("files-limit.example.com")
+
+    response = client.get(
+        f"/api/core/web/sites/{created['id']}/files?page_size=101",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 422
+
+
 def _ready_site(client: TestClient, token: str, domain: str) -> dict[str, object]:
     created = client.post(
         "/api/core/web/sites",

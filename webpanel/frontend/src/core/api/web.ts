@@ -116,6 +116,30 @@ export interface WebSiteLogs {
   error: WebSiteLogFile;
 }
 
+export interface WebSiteFileEntry {
+  name: string;
+  type: "directory" | "file";
+  size: number;
+  modified_at: number;
+  relative_path: string;
+}
+
+export interface WebSiteFiles {
+  site_id: number;
+  domain: string;
+  root_path: string;
+  relative_subpath: string;
+  target_path: string;
+  page: number;
+  page_size: number;
+  max_depth: number;
+  total_entries: number;
+  has_next: boolean;
+  status: string;
+  job_id: number;
+  entries: WebSiteFileEntry[];
+}
+
 export function getWebStatus(token: string) {
   return apiRequest<WebStatus>("/api/core/web/status", { token });
 }
@@ -239,6 +263,23 @@ export function reapplyWebSiteNginxConfig(
 
 export function getWebSiteLogs(token: string, siteId: number, lines = 100) {
   return apiRequest<WebSiteLogs>(`/api/core/web/sites/${siteId}/logs?lines=${lines}`, {
+    token,
+  });
+}
+
+export function getWebSiteFiles(
+  token: string,
+  siteId: number,
+  subpath = "",
+  page = 1,
+  pageSize = 50,
+) {
+  const params = new URLSearchParams({
+    subpath,
+    page: String(page),
+    page_size: String(pageSize),
+  });
+  return apiRequest<WebSiteFiles>(`/api/core/web/sites/${siteId}/files?${params.toString()}`, {
     token,
   });
 }

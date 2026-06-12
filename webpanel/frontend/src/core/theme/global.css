@@ -122,13 +122,13 @@ textarea {
 .module-nav-item.active,
 .utility-nav-item.active {
   background:
-    linear-gradient(90deg, rgba(34, 211, 238, 0.14), rgba(139, 92, 246, 0.1)),
+    linear-gradient(90deg, rgba(34, 211, 238, 0.11), rgba(139, 92, 246, 0.08)),
     #101a29;
-  border-color: rgba(34, 211, 238, 0.28);
-  color: #f4f8fb;
+  border-color: rgba(34, 211, 238, 0.24);
+  color: #eef4f8;
   box-shadow:
-    inset 3px 0 0 #22d3ee,
-    0 12px 26px rgba(15, 23, 42, 0.22);
+    inset 0 0 0 1px rgba(34, 211, 238, 0.05),
+    0 10px 22px rgba(15, 23, 42, 0.18);
 }
 
 .module-nav-item.active svg,
@@ -270,17 +270,19 @@ textarea {
 .module-context {
   align-items: center;
   background:
-    linear-gradient(135deg, rgba(34, 211, 238, 0.12), rgba(139, 92, 246, 0.08)),
-    #0d141d;
-  border: 1px solid rgba(34, 211, 238, 0.22);
+    linear-gradient(90deg, rgba(34, 211, 238, 0.1), rgba(139, 92, 246, 0.07)),
+    #101a29;
+  border: 1px solid rgba(71, 85, 105, 0.24);
   border-radius: 8px;
-  box-shadow: inset 2px 0 0 #22d3ee;
-  color: #dce5ed;
+  box-shadow:
+    inset 0 0 0 1px rgba(34, 211, 238, 0.04),
+    0 10px 22px rgba(15, 23, 42, 0.16);
+  color: #cfd8e6;
   display: flex;
   gap: 10px;
   justify-content: space-between;
-  min-height: 58px;
-  padding: 10px 11px;
+  min-height: 52px;
+  padding: 9px 10px;
 }
 
 .module-context strong,
@@ -289,7 +291,7 @@ textarea {
 }
 
 .module-context strong {
-  color: #f4f8fb;
+  color: #eef4f8;
   font-size: 13px;
   line-height: 1.2;
 }
@@ -304,6 +306,7 @@ textarea {
 .module-context svg {
   color: #67e8f9;
   flex: 0 0 auto;
+  filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.12));
 }
 
 .quick-actions {

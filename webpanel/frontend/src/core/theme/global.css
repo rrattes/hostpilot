@@ -83,14 +83,15 @@ textarea {
 .module-nav-item,
 .utility-nav-item {
   align-items: center;
-  background: transparent;
-  border: 1px solid transparent;
+  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid rgba(71, 85, 105, 0.2);
   border-radius: 8px;
   color: #98a6b8;
   display: flex;
   font-size: 13px;
+  gap: 8px;
   height: 38px;
-  justify-content: space-between;
+  justify-content: flex-start;
   padding: 0 9px 0 11px;
   text-align: left;
   transition:
@@ -98,6 +99,24 @@ textarea {
     border-color 140ms ease,
     color 140ms ease,
     transform 140ms ease;
+  width: 100%;
+}
+
+.module-nav-item svg,
+.utility-nav-item svg {
+  color: #c084fc;
+  flex: 0 0 auto;
+  transition:
+    color 140ms ease,
+    filter 140ms ease;
+}
+
+.module-nav-item span,
+.utility-nav-item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .module-nav-item.active,
@@ -110,6 +129,12 @@ textarea {
   box-shadow:
     inset 3px 0 0 #22d3ee,
     0 12px 26px rgba(15, 23, 42, 0.22);
+}
+
+.module-nav-item.active svg,
+.utility-nav-item.active svg {
+  color: #67e8f9;
+  filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.18));
 }
 
 .module-nav-item.locked {
@@ -125,6 +150,20 @@ textarea {
   transform: translateX(1px);
 }
 
+.module-nav-item:not(.locked):hover svg,
+.utility-nav-item:hover svg {
+  color: #93c5fd;
+}
+
+.module-nav-item:focus-visible,
+.utility-nav-item:focus-visible,
+.quick-action-button:focus-visible,
+.sidebar-group summary:focus-visible {
+  border-color: rgba(34, 211, 238, 0.52);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.12);
+  outline: none;
+}
+
 .sidebar-group {
   border-top: 1px solid rgba(71, 85, 105, 0.24);
   margin-top: 12px;
@@ -133,34 +172,78 @@ textarea {
 
 .sidebar-group summary {
   align-items: center;
-  color: #6f7f92;
+  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid rgba(71, 85, 105, 0.2);
+  border-radius: 8px;
+  color: #98a6b8;
   cursor: pointer;
   display: flex;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   justify-content: space-between;
   letter-spacing: 0;
   list-style: none;
-  padding: 0 8px 7px;
-  text-transform: uppercase;
+  min-height: 34px;
+  padding: 0 9px 0 11px;
+  text-transform: none;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
 }
 
 .sidebar-group summary::-webkit-details-marker {
   display: none;
 }
 
-.sidebar-group summary svg {
-  color: #4f5f75;
-  transition: transform 140ms ease;
+.sidebar-group summary:hover {
+  background: #111a29;
+  border-color: rgba(96, 165, 250, 0.28);
+  color: #dce5ed;
 }
 
-.sidebar-group[open] summary svg {
-  transform: rotate(45deg);
+.sidebar-group-label {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sidebar-group-label svg,
+.sidebar-group-indicator {
+  color: #c084fc;
+  flex: 0 0 auto;
+  transition:
+    color 140ms ease,
+    transform 140ms ease;
+}
+
+.sidebar-group summary:hover .sidebar-group-label svg,
+.sidebar-group summary:hover .sidebar-group-indicator {
+  color: #93c5fd;
+}
+
+.sidebar-group[open] summary {
+  background:
+    linear-gradient(90deg, rgba(34, 211, 238, 0.11), rgba(139, 92, 246, 0.08)),
+    #101a29;
+  border-color: rgba(34, 211, 238, 0.24);
+  color: #eef4f8;
+}
+
+.sidebar-group[open] .sidebar-group-label svg,
+.sidebar-group[open] .sidebar-group-indicator {
+  color: #67e8f9;
+}
+
+.sidebar-group[open] .sidebar-group-indicator {
+  transform: rotate(90deg);
 }
 
 .sidebar-group-items {
   display: grid;
   gap: 5px;
+  padding-top: 6px;
 }
 
 .sidebar-spacer {
@@ -223,10 +306,6 @@ textarea {
   flex: 0 0 auto;
 }
 
-.utility-nav-item {
-  width: 100%;
-}
-
 .quick-actions {
   display: grid;
   gap: 7px;
@@ -243,6 +322,7 @@ textarea {
   font-size: 12px;
   font-weight: 700;
   gap: 8px;
+  justify-content: flex-start;
   min-height: 34px;
   padding: 0 10px;
   text-align: left;
@@ -254,6 +334,7 @@ textarea {
 
 .quick-action-button svg {
   color: #c084fc;
+  flex: 0 0 auto;
 }
 
 .quick-action-button:hover {

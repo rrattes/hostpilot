@@ -2,9 +2,10 @@ import {
   Activity,
   Archive,
   Bell,
+  Boxes,
   ClipboardList,
   CircleHelp,
-  Command,
+  ChevronRight,
   Globe2,
   LayoutDashboard,
   LogOut,
@@ -14,6 +15,7 @@ import {
   SlidersHorizontal,
   ShieldCheck,
   Sparkles,
+  Wrench,
   UserCircle,
   Users,
 } from "lucide-react";
@@ -90,8 +92,8 @@ export function AppLayout({
         onClick={() => onNavigate(page.path)}
         type="button"
       >
+        <Icon size={14} />
         <span>{page.label}</span>
-        <Icon size={15} />
       </button>
     );
   };
@@ -113,6 +115,7 @@ export function AppLayout({
 
         <SidebarGroup
           defaultOpen={["/server", "/agent"].includes(currentPath)}
+          icon={<Server size={14} />}
           label="Infrastructure"
         >
           {infrastructurePages.filter((page) => hasPermission(page.permission)).map((page) => renderNavItem(page))}
@@ -120,19 +123,21 @@ export function AppLayout({
 
         <SidebarGroup
           defaultOpen={["/notifications", "/audit", "/jobs"].includes(currentPath)}
+          icon={<Activity size={14} />}
           label="Operations"
         >
           {operationsPages.filter((page) => hasPermission(page.permission)).map((page) => renderNavItem(page))}
         </SidebarGroup>
 
         {modulePages.length > 0 ? (
-          <SidebarGroup defaultOpen={currentPath === "/web"} label="Modules">
+          <SidebarGroup defaultOpen={currentPath === "/web"} icon={<Boxes size={14} />} label="Modules">
             {modulePages.map((page) => renderNavItem(page))}
           </SidebarGroup>
         ) : null}
 
         <SidebarGroup
           defaultOpen={["/users", "/roles", "/backups", "/settings"].includes(currentPath)}
+          icon={<Wrench size={14} />}
           label="Settings"
         >
           {settingsPages
@@ -251,17 +256,22 @@ interface NavPage {
 function SidebarGroup({
   children,
   defaultOpen,
+  icon,
   label,
 }: {
   children: ReactNode;
   defaultOpen: boolean;
+  icon: ReactNode;
   label: string;
 }) {
   return (
     <details className="sidebar-group" open={defaultOpen}>
       <summary>
-        <span>{label}</span>
-        <Command size={13} />
+        <span className="sidebar-group-label">
+          {icon}
+          {label}
+        </span>
+        <ChevronRight className="sidebar-group-indicator" size={14} />
       </summary>
       <div className="sidebar-group-items">{children}</div>
     </details>

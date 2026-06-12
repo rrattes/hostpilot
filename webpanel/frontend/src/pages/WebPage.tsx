@@ -76,6 +76,7 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
   const [error, setError] = useState<string | null>(null);
   const [siteError, setSiteError] = useState<string | null>(null);
   const [siteMessage, setSiteMessage] = useState<string | null>(null);
+  const [isCreatingSite, setIsCreatingSite] = useState(false);
   const [nginxPreview, setNginxPreview] = useState<WebSiteNginxPreview | null>(null);
   const [applyPlan, setApplyPlan] = useState<WebSiteNginxApplyPlan | null>(null);
   const [dryRunPhrase, setDryRunPhrase] = useState("");
@@ -142,9 +143,10 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
   }
 
   async function handleCreateSite() {
-    if (!token || !canManageSites) return;
+    if (!token || !canManageSites || isCreatingSite) return;
 
     try {
+      setIsCreatingSite(true);
       const created = await createWebSite(token, {
         domain,
         root_path: rootPath,
@@ -167,6 +169,8 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
           : "Unable to create Web site record.",
       );
       setSiteMessage(null);
+    } finally {
+      setIsCreatingSite(false);
     }
   }
 
@@ -494,85 +498,94 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
         {siteError ? <div className="login-error">{siteError}</div> : null}
         {siteMessage ? <div className="success-message">{siteMessage}</div> : null}
 
-        <div className="web-site-form">
-          <label>
-            <span>Domain</span>
-            <input
-              disabled={!canManageSites}
-              onChange={(event) => setDomain(event.target.value)}
-              placeholder="example.com"
-              value={domain}
-            />
-          </label>
-          <label>
-            <span>Root path</span>
-            <input
-              disabled={!canManageSites}
-              onChange={(event) => setRootPath(event.target.value)}
-              placeholder={`${defaultSitesBasePath}/example.com`}
-              value={rootPath}
-            />
-          </label>
-          <label>
-            <span>PHP runtime</span>
-            <input
-              disabled={!canManageSites}
-              onChange={(event) => setPhpRuntime(event.target.value)}
-              value={phpRuntime}
-            />
-          </label>
-          <label className="checkbox-row web-ssl-toggle">
-            <input
-              checked={sslEnabled}
-              disabled={!canManageSites}
-              onChange={(event) => setSslEnabled(event.target.checked)}
-              type="checkbox"
-            />
-            <span>SSL flag only</span>
-          </label>
-          <button
-            className="primary-button compact"
-            disabled={!canManageSites || !domain.trim() || !rootPath.trim()}
-            onClick={handleCreateSite}
-            type="button"
-          >
-            <Plus size={16} />
-            Add Record
-          </button>
-        </div>
-        <div className="web-validation-note">
-          New records must use a valid domain and a safe absolute root path under{" "}
-          <code>{defaultSitesBasePath}</code>. Validation only affects registry records.
-        </div>
+        {canManageSites ? (
+          <>
+            <div className="web-site-form">
+              <label>
+                <span>Domain</span>
+                <input
+                  disabled={isCreatingSite}
+                  onChange={(event) => setDomain(event.target.value)}
+                  placeholder="example.com"
+                  value={domain}
+                />
+              </label>
+              <label>
+                <span>Root path</span>
+                <input
+                  disabled={isCreatingSite}
+                  onChange={(event) => setRootPath(event.target.value)}
+                  placeholder={`${defaultSitesBasePath}/example.com`}
+                  value={rootPath}
+                />
+              </label>
+              <label>
+                <span>PHP runtime</span>
+                <input
+                  disabled={isCreatingSite}
+                  onChange={(event) => setPhpRuntime(event.target.value)}
+                  value={phpRuntime}
+                />
+              </label>
+              <label className="checkbox-row web-ssl-toggle">
+                <input
+                  checked={sslEnabled}
+                  disabled={isCreatingSite}
+                  onChange={(event) => setSslEnabled(event.target.checked)}
+                  type="checkbox"
+                />
+                <span>SSL flag only</span>
+              </label>
+              <button
+                className="primary-button compact"
+                disabled={isCreatingSite || !domain.trim() || !rootPath.trim()}
+                onClick={handleCreateSite}
+                type="button"
+              >
+                <Plus size={16} />
+                {isCreatingSite ? "Adding..." : "Add Record"}
+              </button>
+            </div>
+            <div className="web-validation-note">
+              New records must use a valid domain and a safe absolute root path under{" "}
+              <code>{defaultSitesBasePath}</code>. Validation only affects registry records.
+            </div>
+          </>
+        ) : (
+          <div className="web-permission-note">
+            <Lock size={15} />
+            <span>Add Record requires the web.sites.manage permission.</span>
+          </div>
+        )}
 
-        <div className="data-table-wrap">
-          <table className="data-table web-sites-table">
-            <thead>
-              <tr>
-                <th>Domain</th>
-                <th>Status</th>
-                <th>Root path</th>
-                <th>Runtime</th>
-                <th>SSL</th>
-                <th>Readiness</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {!canViewSites ? (
+        {!canViewSites ? (
+          <div className="web-permission-note">
+            <Lock size={15} />
+            <span>Web site records are hidden because this user lacks web.sites.view.</span>
+          </div>
+        ) : (
+          <div className="data-table-wrap">
+            <table className="data-table web-sites-table">
+              <thead>
                 <tr>
-                  <td colSpan={7}>
-                    <span className="empty-table-note">Web site registry is hidden by RBAC.</span>
-                  </td>
+                  <th>Domain</th>
+                  <th>Status</th>
+                  <th>Root path</th>
+                  <th>Runtime</th>
+                  <th>SSL</th>
+                  <th>Readiness</th>
+                  <th>Actions</th>
                 </tr>
-              ) : sites.length === 0 ? (
-                <tr>
-                  <td colSpan={7}>
-                    <span className="empty-table-note">No Web site records exist yet.</span>
-                  </td>
-                </tr>
-              ) : (
-                sites.map((site) => (
+              </thead>
+              <tbody>
+                {sites.length === 0 ? (
+                  <tr>
+                    <td colSpan={7}>
+                      <span className="empty-table-note">No Web site records exist yet.</span>
+                    </td>
+                  </tr>
+                ) : (
+                  sites.map((site) => (
                   <tr key={site.id}>
                     <td>
                       <strong>{site.domain}</strong>
@@ -673,11 +686,12 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                       </div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       {nginxPreview ? (

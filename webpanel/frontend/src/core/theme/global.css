@@ -981,6 +981,17 @@ textarea {
   color: #b9f3df;
 }
 
+.web-permission-note {
+  align-items: center;
+  background: #101923;
+  border: 1px solid #263546;
+  border-radius: 8px;
+  color: #a4b0bd;
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+}
+
 .web-ssl-toggle {
   color: #aebaca !important;
 }

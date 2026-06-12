@@ -8,7 +8,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.agent_gateway.contracts import AgentActionResponse
 from app.core.auth.security import create_access_token
 from app.db.base import Base
-from app.db.models import AuditEvent, Module, Permission, Role, User, WebSite
+from app.db.models import AuditEvent, Module, Permission, Role, Setting, User, WebSite
 from app.db.session import get_db
 from app.main import app
 
@@ -549,6 +549,7 @@ def test_nginx_apply_plan_is_preview_only_and_audited() -> None:
     assert payload["webroot_path"] == "/var/www/hostpilot-sites/plan.example.com"
     assert payload["config_filename"] == "plan.example.com.conf"
     assert payload["required_directories"] == [
+        "/var/www/hostpilot-sites",
         "/var/www/hostpilot-sites/plan.example.com",
         "/etc/nginx/sites-available",
         "/etc/nginx/sites-available/hostpilot",
@@ -665,6 +666,7 @@ def test_nginx_dry_run_simulates_apply_without_changes_and_audits() -> None:
     assert payload["target_config_path"] == "/etc/nginx/sites-available/hostpilot/dry.example.com.conf"
     assert payload["webroot_path"] == "/var/www/hostpilot-sites/dry.example.com"
     assert payload["directory_checks"] == [
+        "would ensure directory exists: /var/www/hostpilot-sites",
         "would ensure directory exists: /var/www/hostpilot-sites/dry.example.com",
         "would ensure directory exists: /etc/nginx/sites-available",
         "would ensure directory exists: /etc/nginx/sites-available/hostpilot",
@@ -743,6 +745,62 @@ def test_controlled_nginx_apply_calls_agent_and_updates_site(monkeypatch) -> Non
         "/etc/nginx/sites-available/hostpilot/apply-agent.example.com.conf"
     )
     assert captured_payload["allowed_nginx_base"] == "/etc/nginx/sites-available/hostpilot"
+
+
+def test_controlled_nginx_apply_uses_configured_allowed_base_path(monkeypatch) -> None:
+    captured_payload: dict[str, object] | None = None
+
+    def fake_execute_agent_action(db: Session, *, action: str, payload: dict[str, object], user: User):
+        nonlocal captured_payload
+        captured_payload = payload
+        from app.db.models import Job
+
+        job = Job(
+            type="agent_action",
+            module="agent",
+            action=action,
+            status="completed",
+            payload="{}",
+            result="{}",
+        )
+        db.add(job)
+        db.flush()
+        return job, AgentActionResponse(
+            success=True,
+            status="applied",
+            data={"applied": True, "reloaded": True},
+            error=None,
+            duration_ms=3,
+        )
+
+    monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    _set_allowed_base_path("/srv/hostpilot-sites")
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = _ready_site(
+        client,
+        token,
+        "custom-apply.example.com",
+        root_path="/srv/hostpilot-sites/custom-apply.example.com",
+    )
+
+    plan_response = client.get(
+        f"/api/core/web/sites/{created['id']}/nginx-apply-plan",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    response = client.post(
+        f"/api/core/web/sites/{created['id']}/nginx-apply",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"confirmation_phrase": "APPLY NGINX PLAN custom-apply.example.com"},
+    )
+
+    assert plan_response.status_code == 200
+    assert plan_response.json()["webroot_path"] == "/srv/hostpilot-sites/custom-apply.example.com"
+    assert "/srv/hostpilot-sites" in plan_response.json()["required_directories"]
+    assert response.status_code == 200
+    assert captured_payload is not None
+    assert captured_payload["webroot_path"] == "/srv/hostpilot-sites/custom-apply.example.com"
+    assert captured_payload["allowed_webroot_base"] == "/srv/hostpilot-sites"
 
 
 def test_controlled_nginx_apply_marks_error_on_agent_failure(monkeypatch) -> None:
@@ -1391,6 +1449,63 @@ def test_web_site_files_calls_agent_with_site_root_and_returns_entries(monkeypat
     }
 
 
+def test_web_site_files_uses_configured_allowed_base_path(monkeypatch) -> None:
+    captured_payload: dict[str, object] | None = None
+
+    def fake_execute_agent_action(db: Session, *, action: str, payload: dict[str, object], user: User):
+        nonlocal captured_payload
+        captured_payload = payload
+        from app.db.models import Job
+
+        job = Job(
+            type="agent_action",
+            module="agent",
+            action=action,
+            status="completed",
+            payload="{}",
+            result="{}",
+        )
+        db.add(job)
+        db.flush()
+        return job, AgentActionResponse(
+            success=True,
+            status="completed",
+            data={
+                "status": "completed",
+                "root_path": "/srv/hostpilot-sites/files-custom.example.com",
+                "relative_subpath": "",
+                "target_path": "/srv/hostpilot-sites/files-custom.example.com",
+                "page": 1,
+                "page_size": 50,
+                "max_depth": 1,
+                "total_entries": 0,
+                "has_next": False,
+                "entries": [],
+            },
+            error=None,
+            duration_ms=2,
+        )
+
+    monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    _set_allowed_base_path("/srv/hostpilot-sites")
+    token = _token_with_permissions(["web.sites.view"])
+    client = TestClient(app)
+    created = _site_record(
+        "files-custom.example.com",
+        root_path="/srv/hostpilot-sites/files-custom.example.com",
+    )
+
+    response = client.get(
+        f"/api/core/web/sites/{created['id']}/files",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert captured_payload is not None
+    assert captured_payload["root_path"] == "/srv/hostpilot-sites/files-custom.example.com"
+    assert captured_payload["allowed_webroot_base"] == "/srv/hostpilot-sites"
+
+
 def test_web_site_files_rejects_traversal_before_agent(monkeypatch) -> None:
     called = False
 
@@ -1497,13 +1612,19 @@ def test_web_site_files_rejects_page_size_above_max() -> None:
     assert response.status_code == 422
 
 
-def _ready_site(client: TestClient, token: str, domain: str) -> dict[str, object]:
+def _ready_site(
+    client: TestClient,
+    token: str,
+    domain: str,
+    *,
+    root_path: str | None = None,
+) -> dict[str, object]:
     created = client.post(
         "/api/core/web/sites",
         headers={"Authorization": f"Bearer {token}"},
         json={
             "domain": domain,
-            "root_path": f"/var/www/hostpilot-sites/{domain}",
+            "root_path": root_path or f"/var/www/hostpilot-sites/{domain}",
             "php_runtime": "php-8.3",
             "ssl_enabled": False,
         },
@@ -1519,11 +1640,11 @@ def _ready_site(client: TestClient, token: str, domain: str) -> dict[str, object
     return created
 
 
-def _site_record(domain: str) -> dict[str, object]:
+def _site_record(domain: str, *, root_path: str | None = None) -> dict[str, object]:
     with TestingSessionLocal() as db:
         site = WebSite(
             domain=domain,
-            root_path=f"/var/www/hostpilot-sites/{domain}",
+            root_path=root_path or f"/var/www/hostpilot-sites/{domain}",
             status="config_pending",
             provisioning_status="draft",
             php_runtime="php-8.3",
@@ -1533,6 +1654,17 @@ def _site_record(domain: str) -> dict[str, object]:
         db.commit()
         db.refresh(site)
         return {"id": site.id, "domain": site.domain}
+
+
+def _set_allowed_base_path(value: str) -> None:
+    with TestingSessionLocal() as db:
+        setting = db.query(Setting).filter(Setting.key == "web.sites.allowed_base_path").one_or_none()
+        if setting is None:
+            setting = Setting(key="web.sites.allowed_base_path", value=value, is_sensitive=False)
+            db.add(setting)
+        else:
+            setting.value = value
+        db.commit()
 
 
 def _applied_site(client: TestClient, token: str, domain: str) -> dict[str, object]:

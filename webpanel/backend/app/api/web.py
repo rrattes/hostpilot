@@ -365,7 +365,8 @@ def get_web_site_files(
     site = _site_or_404(db, site_id)
     _validate_root_path(site.root_path, _allowed_base_path(db))
     relative_subpath = _validate_relative_subpath(subpath)
-    agent_payload = _agent_files_payload(site, relative_subpath, page, page_size)
+    allowed_base_path = _allowed_base_path(db)
+    agent_payload = _agent_files_payload(site, relative_subpath, page, page_size, allowed_base_path)
     record_audit_event(
         db,
         action="web.site.files.listed",
@@ -666,7 +667,7 @@ def get_web_site_nginx_apply_plan(
             detail="Site must be ready_to_apply before generating an apply plan.",
         )
 
-    plan = _nginx_apply_plan(site)
+    plan = _nginx_apply_plan(site, _allowed_base_path(db))
     record_audit_event(
         db,
         action="web.site.nginx_apply_plan.generated",
@@ -703,7 +704,8 @@ def dry_run_web_site_nginx_apply(
             detail="Site must be ready_to_apply before running a dry-run.",
         )
 
-    plan = _nginx_apply_plan(site)
+    allowed_base_path = _allowed_base_path(db)
+    plan = _nginx_apply_plan(site, allowed_base_path)
     if payload.confirmation_phrase.strip() != plan.confirmation_phrase:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -723,7 +725,7 @@ def dry_run_web_site_nginx_apply(
             "executed": "false",
         },
     )
-    result = _nginx_dry_run(site)
+    result = _nginx_dry_run(site, allowed_base_path)
     record_audit_event(
         db,
         action="web.site.nginx_dry_run.completed",
@@ -760,14 +762,15 @@ def apply_web_site_nginx_config(
             status_code=status.HTTP_409_CONFLICT,
             detail="Site must be ready_to_apply before applying Nginx config.",
         )
-    plan = _nginx_apply_plan(site)
+    allowed_base_path = _allowed_base_path(db)
+    plan = _nginx_apply_plan(site, allowed_base_path)
     if payload.confirmation_phrase.strip() != plan.confirmation_phrase:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Confirmation phrase does not match.",
         )
 
-    agent_payload = _agent_apply_payload(site)
+    agent_payload = _agent_apply_payload(site, allowed_base_path)
     record_audit_event(
         db,
         action="web.site.nginx_apply.requested",
@@ -906,14 +909,14 @@ def reapply_web_site_nginx_config(
             detail=f"Site is not ready to re-apply: {', '.join(failed)}.",
         )
 
-    plan = _nginx_apply_plan(site)
+    plan = _nginx_apply_plan(site, _allowed_base_path(db))
     if payload.confirmation_phrase.strip() != plan.confirmation_phrase:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Confirmation phrase does not match.",
         )
 
-    agent_payload = _agent_apply_payload(site)
+    agent_payload = _agent_apply_payload(site, _allowed_base_path(db))
     record_audit_event(
         db,
         action="web.site.nginx_reapply.requested",
@@ -1170,15 +1173,17 @@ server {{
 """
 
 
-def _nginx_apply_plan(site: WebSite) -> WebSiteNginxApplyPlanRead:
+def _nginx_apply_plan(site: WebSite, allowed_webroot_base: str = DEFAULT_WEB_SITES_BASE_PATH) -> WebSiteNginxApplyPlanRead:
     config_filename = f"{site.domain}.conf"
     target_config_path = f"/etc/nginx/sites-available/hostpilot/{config_filename}"
+    allowed_base = posixpath.normpath(allowed_webroot_base)
     return WebSiteNginxApplyPlanRead(
         site_id=site.id,
         domain=site.domain,
         target_config_path=target_config_path,
         webroot_path=site.root_path,
         required_directories=[
+            allowed_base,
             site.root_path,
             "/etc/nginx/sites-available",
             "/etc/nginx/sites-available/hostpilot",
@@ -1198,8 +1203,8 @@ def _nginx_apply_plan(site: WebSite) -> WebSiteNginxApplyPlanRead:
     )
 
 
-def _nginx_dry_run(site: WebSite) -> WebSiteDryRunRead:
-    plan = _nginx_apply_plan(site)
+def _nginx_dry_run(site: WebSite, allowed_webroot_base: str = DEFAULT_WEB_SITES_BASE_PATH) -> WebSiteDryRunRead:
+    plan = _nginx_apply_plan(site, allowed_webroot_base)
     return WebSiteDryRunRead(
         site_id=site.id,
         domain=site.domain,
@@ -1215,14 +1220,14 @@ def _nginx_dry_run(site: WebSite) -> WebSiteDryRunRead:
     )
 
 
-def _agent_apply_payload(site: WebSite) -> dict[str, object]:
-    plan = _nginx_apply_plan(site)
+def _agent_apply_payload(site: WebSite, allowed_webroot_base: str) -> dict[str, object]:
+    plan = _nginx_apply_plan(site, allowed_webroot_base)
     return {
         "domain": site.domain,
         "webroot_path": site.root_path,
         "target_config_path": plan.target_config_path,
         "config_content": _nginx_preview(site),
-        "allowed_webroot_base": DEFAULT_WEB_SITES_BASE_PATH,
+        "allowed_webroot_base": posixpath.normpath(allowed_webroot_base),
         "allowed_nginx_base": "/etc/nginx/sites-available/hostpilot",
     }
 
@@ -1244,13 +1249,19 @@ def _agent_logs_payload(site: WebSite, lines: int) -> dict[str, object]:
     }
 
 
-def _agent_files_payload(site: WebSite, relative_subpath: str, page: int, page_size: int) -> dict[str, object]:
+def _agent_files_payload(
+    site: WebSite,
+    relative_subpath: str,
+    page: int,
+    page_size: int,
+    allowed_webroot_base: str,
+) -> dict[str, object]:
     return {
         "root_path": site.root_path,
         "relative_subpath": relative_subpath,
         "page": page,
         "page_size": min(page_size, MAX_WEB_FILE_PAGE_SIZE),
-        "allowed_webroot_base": DEFAULT_WEB_SITES_BASE_PATH,
+        "allowed_webroot_base": posixpath.normpath(allowed_webroot_base),
     }
 
 

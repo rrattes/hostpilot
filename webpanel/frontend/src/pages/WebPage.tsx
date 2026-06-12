@@ -23,6 +23,7 @@ import {
   listWebSites,
   markWebSiteReadyToApply,
   previewWebSiteNginxConfig,
+  reapplyWebSiteNginxConfig,
   runWebSiteNginxDryRun,
   type ProvisioningStatus,
   type WebSectionStatus,
@@ -33,6 +34,7 @@ import {
   type WebSiteNginxApplyPlan,
   type WebSiteNginxPreview,
   type WebSiteReadiness,
+  type WebSiteReapplyResult,
   type WebStatus,
 } from "../core/api/web";
 import { ApiError } from "../core/api/client";
@@ -74,6 +76,9 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
   const [disableTarget, setDisableTarget] = useState<WebSite | null>(null);
   const [disablePhrase, setDisablePhrase] = useState("");
   const [disableResult, setDisableResult] = useState<WebSiteDisableResult | null>(null);
+  const [reapplyTarget, setReapplyTarget] = useState<WebSite | null>(null);
+  const [reapplyPhrase, setReapplyPhrase] = useState("");
+  const [reapplyResult, setReapplyResult] = useState<WebSiteReapplyResult | null>(null);
   const sections = useMemo(() => status?.sections ?? fallbackSections(), [status]);
 
   useEffect(() => {
@@ -304,6 +309,38 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
     setSiteError(null);
   }
 
+  async function handleReapplyNginxConfig() {
+    if (!token || !reapplyTarget || !canManageSites) return;
+
+    try {
+      const result = await reapplyWebSiteNginxConfig(token, reapplyTarget.id, reapplyPhrase);
+      setReapplyResult(result);
+      setSites((current) => current.map((site) => (site.id === result.site.id ? result.site : site)));
+      const readiness = await getWebSiteReadiness(token, result.site.id);
+      setReadinessBySiteId((current) => ({ ...current, [result.site.id]: readiness }));
+      setSiteError(null);
+      setSiteMessage(
+        result.success
+          ? `${result.site.domain} re-applied through controlled Agent job #${result.job_id}.`
+          : `${result.site.domain} re-apply failed through Agent job #${result.job_id}.`,
+      );
+    } catch (reapplyError) {
+      setSiteError(
+        reapplyError instanceof ApiError
+          ? reapplyError.message
+          : "Unable to re-apply Nginx config.",
+      );
+      setReapplyResult(null);
+    }
+  }
+
+  function openReapplyModal(site: WebSite) {
+    setReapplyTarget(site);
+    setReapplyPhrase("");
+    setReapplyResult(null);
+    setSiteError(null);
+  }
+
   return (
     <section className="data-page web-page" aria-label="Web module">
       <div className="section-heading">
@@ -528,6 +565,15 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                           <Lock size={15} />
                           Disable Site
                         </button>
+                        <button
+                          className="icon-text-button"
+                          disabled={!canManageSites || !["disabled", "error"].includes(site.status)}
+                          onClick={() => openReapplyModal(site)}
+                          type="button"
+                        >
+                          <ShieldCheck size={15} />
+                          Enable/Re-Apply
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -710,6 +756,56 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
           </section>
         </div>
       ) : null}
+
+      {reapplyTarget ? (
+        <div className="modal-backdrop" role="presentation">
+          <section className="confirm-modal nginx-preview-modal" aria-label="Enable or re-apply Nginx site">
+            <div>
+              <span className="eyebrow">Controlled Agent re-apply</span>
+              <h2>Enable/Re-Apply site</h2>
+            </div>
+            <p>
+              This reuses the controlled apply flow for {reapplyTarget.domain}. The Agent may only
+              create the approved webroot, write the one HostPilot-managed Nginx config, run nginx
+              -t, and reload Nginx if validation passes.
+            </p>
+            <div className="web-apply-warning">
+              <strong>Required confirmation</strong>
+              <span>{applyConfirmationPhrase(reapplyTarget)}</span>
+            </div>
+            <label className="dry-run-confirmation">
+              <span>Enable/Re-Apply confirmation phrase</span>
+              <input
+                onChange={(event) => setReapplyPhrase(event.target.value)}
+                placeholder={applyConfirmationPhrase(reapplyTarget)}
+                value={reapplyPhrase}
+              />
+            </label>
+            <button
+              className="primary-button compact"
+              disabled={!canManageSites || reapplyPhrase !== applyConfirmationPhrase(reapplyTarget)}
+              onClick={handleReapplyNginxConfig}
+              type="button"
+            >
+              Enable/Re-Apply Site
+            </button>
+            {reapplyResult ? <AgentResultPanel result={reapplyResult} mode="re-apply" /> : null}
+            <div className="modal-actions">
+              <button
+                className="icon-text-button"
+                onClick={() => {
+                  setReapplyTarget(null);
+                  setReapplyPhrase("");
+                  setReapplyResult(null);
+                }}
+                type="button"
+              >
+                Close
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -723,7 +819,7 @@ function AgentResultPanel({
   mode,
 }: {
   result: WebSiteApplyResult | WebSiteDisableResult;
-  mode: "apply" | "disable";
+  mode: "apply" | "disable" | "re-apply";
 }) {
   return (
     <div className={`dry-run-result ${result.success ? "" : "failed"}`}>
@@ -747,6 +843,10 @@ function AgentResultPanel({
 
 function disableConfirmationPhrase(site: WebSite) {
   return `DISABLE NGINX SITE ${site.domain}`;
+}
+
+function applyConfirmationPhrase(site: WebSite) {
+  return `APPLY NGINX PLAN ${site.domain}`;
 }
 
 function DryRunResultPanel({ result }: { result: WebSiteDryRunResult }) {

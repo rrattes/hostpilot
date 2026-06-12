@@ -972,6 +972,178 @@ def test_controlled_nginx_disable_requires_manage_permission() -> None:
     assert response.status_code == 403
 
 
+def test_controlled_nginx_reapply_calls_apply_agent_and_updates_site(monkeypatch) -> None:
+    captured_action: str | None = None
+    captured_payload: dict[str, object] | None = None
+
+    def fake_execute_agent_action(db: Session, *, action: str, payload: dict[str, object], user: User):
+        nonlocal captured_action, captured_payload
+        captured_action = action
+        captured_payload = payload
+        from app.db.models import Job
+
+        job = Job(
+            type="agent_action",
+            module="agent",
+            action=action,
+            status="completed",
+            payload="{}",
+            result="{}",
+        )
+        db.add(job)
+        db.flush()
+        return job, AgentActionResponse(
+            success=True,
+            status="applied",
+            data={"applied": True, "reloaded": True},
+            error=None,
+            duration_ms=3,
+        )
+
+    monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = _disabled_site(client, token, "reapply-agent.example.com")
+
+    response = client.post(
+        f"/api/core/web/sites/{created['id']}/nginx-reapply",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"confirmation_phrase": "APPLY NGINX PLAN reapply-agent.example.com"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["site"]["status"] == "applied"
+    assert payload["site"]["provisioning_status"] == "ready_to_apply"
+    assert captured_action == "web.nginx.apply_site_config"
+    assert captured_payload is not None
+    assert captured_payload["target_config_path"] == (
+        "/etc/nginx/sites-available/hostpilot/reapply-agent.example.com.conf"
+    )
+
+    with TestingSessionLocal() as db:
+        audit_actions = [
+            row[0]
+            for row in db.query(AuditEvent.action)
+            .filter(
+                AuditEvent.target_type == "web_site",
+                AuditEvent.target_id == str(created["id"]),
+                AuditEvent.action.like("web.site.nginx_reapply%"),
+            )
+            .order_by(AuditEvent.id)
+            .all()
+        ]
+    assert audit_actions == [
+        "web.site.nginx_reapply.requested",
+        "web.site.nginx_reapply.completed",
+    ]
+
+
+def test_controlled_nginx_reapply_rejects_unsafe_path_before_agent(monkeypatch) -> None:
+    called = False
+
+    def fake_execute_agent_action(db: Session, *, action: str, payload: dict[str, object], user: User):
+        nonlocal called
+        called = True
+        raise AssertionError("Agent should not be called for unsafe readiness")
+
+    monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = _disabled_site(client, token, "reapply-unsafe.example.com")
+    _mutate_site(created["id"], root_path="/etc")
+
+    response = client.post(
+        f"/api/core/web/sites/{created['id']}/nginx-reapply",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"confirmation_phrase": "APPLY NGINX PLAN reapply-unsafe.example.com"},
+    )
+
+    assert response.status_code == 409
+    assert "Safe root path" in response.json()["detail"]
+    assert called is False
+
+
+def test_controlled_nginx_reapply_requires_readiness(monkeypatch) -> None:
+    called = False
+
+    def fake_execute_agent_action(db: Session, *, action: str, payload: dict[str, object], user: User):
+        nonlocal called
+        called = True
+        raise AssertionError("Agent should not be called when readiness fails")
+
+    monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = _disabled_site(client, token, "reapply-readiness.example.com")
+    _mutate_site(created["id"], ssl_enabled=True)
+
+    response = client.post(
+        f"/api/core/web/sites/{created['id']}/nginx-reapply",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"confirmation_phrase": "APPLY NGINX PLAN reapply-readiness.example.com"},
+    )
+
+    assert response.status_code == 409
+    assert "SSL disabled/pending" in response.json()["detail"]
+    assert called is False
+
+
+def test_controlled_nginx_reapply_marks_error_on_apply_failure(monkeypatch) -> None:
+    def fake_execute_agent_action(db: Session, *, action: str, payload: dict[str, object], user: User):
+        from app.db.models import Job
+
+        job = Job(
+            type="agent_action",
+            module="agent",
+            action=action,
+            status="failed",
+            payload="{}",
+            result="{}",
+        )
+        db.add(job)
+        db.flush()
+        return job, AgentActionResponse(
+            success=False,
+            status="validation_failed",
+            data={"rolled_back": True, "reloaded": False},
+            error="validation_failed",
+            duration_ms=4,
+        )
+
+    monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = _error_site(client, token, "reapply-fail.example.com")
+
+    response = client.post(
+        f"/api/core/web/sites/{created['id']}/nginx-reapply",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"confirmation_phrase": "APPLY NGINX PLAN reapply-fail.example.com"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["success"] is False
+    assert response.json()["site"]["status"] == "error"
+    assert response.json()["site"]["provisioning_status"] == "error"
+    assert response.json()["result"]["rolled_back"] is True
+
+
+def test_controlled_nginx_reapply_requires_disabled_or_error_status() -> None:
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = _applied_site(client, token, "reapply-status.example.com")
+
+    response = client.post(
+        f"/api/core/web/sites/{created['id']}/nginx-reapply",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"confirmation_phrase": "APPLY NGINX PLAN reapply-status.example.com"},
+    )
+
+    assert response.status_code == 409
+
+
 def _ready_site(client: TestClient, token: str, domain: str) -> dict[str, object]:
     created = client.post(
         "/api/core/web/sites",
@@ -1000,10 +1172,26 @@ def _applied_site(client: TestClient, token: str, domain: str) -> dict[str, obje
     return created
 
 
+def _disabled_site(client: TestClient, token: str, domain: str) -> dict[str, object]:
+    created = _ready_site(client, token, domain)
+    _mutate_site(created["id"], status="disabled", provisioning_status="disabled")
+    return created
+
+
+def _error_site(client: TestClient, token: str, domain: str) -> dict[str, object]:
+    created = _ready_site(client, token, domain)
+    _mutate_site(created["id"], status="error", provisioning_status="error")
+    return created
+
+
 def _mark_site_applied(site_id: object) -> None:
+    _mutate_site(site_id, status="applied", provisioning_status="ready_to_apply")
+
+
+def _mutate_site(site_id: object, **changes: object) -> None:
     with TestingSessionLocal() as db:
         site = db.get(WebSite, site_id)
         assert site is not None
-        site.status = "applied"
-        site.provisioning_status = "ready_to_apply"
+        for key, value in changes.items():
+            setattr(site, key, value)
         db.commit()

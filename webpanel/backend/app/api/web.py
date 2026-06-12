@@ -151,6 +151,19 @@ class WebSiteDisableRead(BaseModel):
     error: str | None
 
 
+class WebSiteReapplyRequest(BaseModel):
+    confirmation_phrase: str = Field(min_length=1)
+
+
+class WebSiteReapplyRead(BaseModel):
+    site: WebSiteRead
+    job_id: int
+    success: bool
+    status: str
+    result: dict[str, object]
+    error: str | None
+
+
 WEB_SECTIONS = [
     WebSectionStatus(
         slug="sites",
@@ -691,6 +704,83 @@ def disable_web_site_nginx_config(
     )
 
 
+@router.post(
+    "/web/sites/{site_id}/nginx-reapply",
+    response_model=WebSiteReapplyRead,
+    dependencies=[Depends(require_permission("web.sites.manage"))],
+)
+def reapply_web_site_nginx_config(
+    site_id: int,
+    payload: WebSiteReapplyRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> WebSiteReapplyRead:
+    site = _site_or_404(db, site_id)
+    if site.status not in {"disabled", "error"}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Site must be disabled or error before re-applying Nginx config.",
+        )
+
+    readiness = _readiness_read(db, site)
+    if not readiness.ready:
+        failed = [check.label for check in readiness.checks if not check.passed]
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Site is not ready to re-apply: {', '.join(failed)}.",
+        )
+
+    plan = _nginx_apply_plan(site)
+    if payload.confirmation_phrase.strip() != plan.confirmation_phrase:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Confirmation phrase does not match.",
+        )
+
+    agent_payload = _agent_apply_payload(site)
+    record_audit_event(
+        db,
+        action="web.site.nginx_reapply.requested",
+        target_type="web_site",
+        target_id=str(site.id),
+        outcome="success",
+        actor_user_id=user.id,
+        metadata={"domain": site.domain, "target_config_path": agent_payload["target_config_path"]},
+    )
+    job, response = execute_mock_agent_action(
+        db,
+        action="web.nginx.apply_site_config",
+        payload=agent_payload,
+        user=user,
+    )
+    site.status = "applied" if response.success else "error"
+    site.provisioning_status = "ready_to_apply" if response.success else "error"
+    record_audit_event(
+        db,
+        action="web.site.nginx_reapply.completed",
+        target_type="web_site",
+        target_id=str(site.id),
+        outcome="success" if response.success else "failure",
+        actor_user_id=user.id,
+        metadata={
+            "domain": site.domain,
+            "job_id": str(job.id),
+            "agent_status": response.status,
+        },
+    )
+    db.commit()
+    db.refresh(site)
+    db.refresh(job)
+    return WebSiteReapplyRead(
+        site=_site_read(site),
+        job_id=job.id,
+        success=response.success,
+        status=response.status,
+        result=response.data,
+        error=response.error,
+    )
+
+
 def _site_or_404(db: Session, site_id: int) -> WebSite:
     site = db.get(WebSite, site_id)
     if site is None:
@@ -781,7 +871,7 @@ def _check_no_duplicate_domain(db: Session, site: WebSite) -> WebSiteReadinessCh
 
 
 def _check_nginx_preview_available(site: WebSite) -> WebSiteReadinessCheck:
-    passed = site.provisioning_status in {"config_previewed", "ready_to_apply"}
+    passed = site.provisioning_status in {"config_previewed", "ready_to_apply", "disabled", "error"}
     return WebSiteReadinessCheck(
         slug="nginx_preview_available",
         label="Nginx preview available",

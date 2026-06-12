@@ -98,6 +98,7 @@ export interface WebSiteApplyResult {
 }
 
 export type WebSiteDisableResult = WebSiteApplyResult;
+export type WebSiteReapplyResult = WebSiteApplyResult;
 
 export function getWebStatus(token: string) {
   return apiRequest<WebStatus>("/api/core/web/status", { token });
@@ -202,6 +203,18 @@ export function disableWebSiteNginxConfig(
   confirmationPhrase: string,
 ) {
   return apiRequest<WebSiteDisableResult>(`/api/core/web/sites/${siteId}/nginx-disable`, {
+    method: "POST",
+    token,
+    body: { confirmation_phrase: confirmationPhrase },
+  });
+}
+
+export function reapplyWebSiteNginxConfig(
+  token: string,
+  siteId: number,
+  confirmationPhrase: string,
+) {
+  return apiRequest<WebSiteReapplyResult>(`/api/core/web/sites/${siteId}/nginx-reapply`, {
     method: "POST",
     token,
     body: { confirmation_phrase: confirmationPhrase },

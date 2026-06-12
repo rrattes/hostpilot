@@ -1,21 +1,21 @@
 import {
   Activity,
+  AlertTriangle,
+  CheckCircle2,
   Clock3,
   Database,
-  History,
+  GitBranch,
   Layers3,
   Lock,
   RadioTower,
-  Server,
-  Settings,
   ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { AgentStatus } from "../core/api/agent";
 import type { CoreHealthStatus } from "../core/api/status";
 import {
-  moduleCardState,
   moduleDescription,
   moduleStatusLabel,
   type ModuleDefinition,
@@ -30,161 +30,264 @@ interface DashboardPageProps {
   onModuleStateChange: (slug: string, state: ModuleState) => void;
 }
 
-interface MetricCardProps {
+interface OverviewMetricProps {
   description: string;
   icon: ReactNode;
   label: string;
-  tone?: "default" | "primary";
+  tone: "cyan" | "blue" | "purple" | "pink";
   value: number | string;
 }
 
+const activityPoints = [18, 34, 27, 52, 44, 69, 58, 82, 76, 91, 84, 97];
+
 export function DashboardPage({
-  canManageModules,
   agentStatus,
   healthStatus,
   modules,
-  onModuleStateChange,
 }: DashboardPageProps) {
-  const activeModules =
+  const enabledModules =
     healthStatus?.enabled_modules_count ?? modules.filter((module) => module.state === "enabled").length;
   const lockedModules =
     healthStatus?.locked_modules_count ?? modules.filter((module) => module.state === "locked").length;
+  const issueCount = Number(healthStatus?.database_status !== "ok") + Number(agentStatus?.status === "error");
+  const recentJobs = healthStatus?.recent_jobs_count ?? 0;
+  const recentAudit = healthStatus?.recent_audit_events_count ?? 0;
+  const jobDonutStyle = {
+    "--done": `${Math.max(22, Math.min(72, 36 + recentJobs * 4))}%`,
+    "--queued": `${Math.max(12, Math.min(28, 18 + recentAudit))}%`,
+  } as React.CSSProperties;
 
   return (
-    <div className="dashboard">
-      <section className="dashboard-section" aria-label="Core runtime">
-        <div className="dashboard-section-heading">
-          <div>
-            <span className="eyebrow">Runtime</span>
-            <h2>Core status</h2>
-          </div>
-          <span className="section-chip">
-            <Activity size={14} />
-            Live checks
-          </span>
+    <div className="dashboard dashboard-overview">
+      <section className="overview-hero" aria-label="HostPilot overview">
+        <div>
+          <span className="eyebrow">Overview</span>
+          <h2>Environment command center</h2>
+          <p>
+            Core health, activity, jobs, and module posture in one focused view.
+          </p>
         </div>
-
-        <div className="summary-grid summary-grid-runtime">
-          <MetricCard
-            description={`DB ${healthStatus?.database_status ?? "checking"} / Agent ${
-              healthStatus?.agent_mock_status ?? "checking"
-            }`}
-            icon={<ShieldCheck size={17} />}
-            label="Core"
-            tone="primary"
-            value={healthStatus?.core_status === "ok" ? "Active" : "Loading"}
-          />
-          <MetricCard
-            description="Only the Core is functional in this scaffold."
-            icon={<Layers3 size={17} />}
-            label="Enabled modules"
-            value={activeModules}
-          />
-          <MetricCard
-            description="Future vertical capabilities are visible but unavailable."
-            icon={<Lock size={17} />}
-            label="Locked modules"
-            value={lockedModules}
-          />
+        <div className="overview-hero-status">
+          <span>
+            <ShieldCheck size={16} />
+            Core {healthStatus?.core_status ?? "checking"}
+          </span>
+          <span>
+            <RadioTower size={16} />
+            Agent {agentStatus?.status ?? "checking"}
+          </span>
         </div>
       </section>
 
-      <section className="dashboard-section" aria-label="Core activity">
-        <div className="dashboard-section-heading compact">
-          <div>
-            <span className="eyebrow">Activity</span>
-            <h2>Last 24 hours</h2>
-          </div>
-        </div>
-
-        <div className="summary-grid summary-grid-activity">
-          <MetricCard
-            description="Mock/dev and Core job records in the last 24 hours."
-            icon={<Clock3 size={17} />}
-            label="Recent jobs"
-            value={healthStatus?.recent_jobs_count ?? 0}
-          />
-          <MetricCard
-            description="Security and Core activity records in the last 24 hours."
-            icon={<History size={17} />}
-            label="Recent audit"
-            value={healthStatus?.recent_audit_events_count ?? 0}
-          />
-          <MetricCard
-            description={healthStatus?.local_server?.hostname ?? "Waiting for Core status."}
-            icon={<Server size={17} />}
-            label="Local server"
-            value={healthStatus?.local_server?.name ?? "Not loaded"}
-          />
-          <MetricCard
-            description={
-              agentStatus
-                ? `${agentStatus.mode} / ${agentStatus.allowed_actions.length} allowed mock actions`
-                : "Waiting for mock agent gateway."
-            }
-            icon={<RadioTower size={17} />}
-            label="Agent"
-            value={agentStatus?.status ?? "Unknown"}
-          />
-        </div>
+      <section className="overview-metrics" aria-label="Summary metrics">
+        <OverviewMetric
+          description={`Database ${healthStatus?.database_status ?? "checking"} / Agent ${
+            healthStatus?.agent_mock_status ?? "checking"
+          }`}
+          icon={<ShieldCheck size={20} />}
+          label="Core Status"
+          tone="cyan"
+          value={healthStatus?.core_status === "ok" ? "Operational" : "Checking"}
+        />
+        <OverviewMetric
+          description={`${lockedModules} locked or unavailable capabilities`}
+          icon={<Layers3 size={20} />}
+          label="Modules Enabled"
+          tone="blue"
+          value={enabledModules}
+        />
+        <OverviewMetric
+          description="Database and agent checks requiring attention"
+          icon={<AlertTriangle size={20} />}
+          label="Alerts / Issues"
+          tone="pink"
+          value={issueCount}
+        />
+        <OverviewMetric
+          description="Job records created in the last 24 hours"
+          icon={<Clock3 size={20} />}
+          label="Recent Jobs"
+          tone="purple"
+          value={recentJobs}
+        />
       </section>
 
-      <section className="module-section" aria-label="Module catalog">
-        <div className="section-heading dashboard-section-heading">
-          <div>
-            <span className="eyebrow">Registry preview</span>
-            <h2>Modules</h2>
+      <section className="overview-main-grid" aria-label="Dashboard details">
+        <article className="overview-panel system-activity-panel">
+          <PanelHeader
+            eyebrow="Telemetry"
+            icon={<Activity size={16} />}
+            title="System Activity"
+          />
+          <div className="activity-chart" aria-label="System activity chart">
+            <svg viewBox="0 0 480 180" role="img" aria-label="Activity trend">
+              <defs>
+                <linearGradient id="activityFill" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor="#22d3ee" stopOpacity="0.42" />
+                  <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0.02" />
+                </linearGradient>
+                <linearGradient id="activityLine" x1="0" x2="1" y1="0" y2="0">
+                  <stop offset="0%" stopColor="#22d3ee" />
+                  <stop offset="55%" stopColor="#3b82f6" />
+                  <stop offset="100%" stopColor="#ec4899" />
+                </linearGradient>
+              </defs>
+              <path className="activity-grid-line" d="M0 42H480M0 90H480M0 138H480" />
+              <path className="activity-fill" d={activityAreaPath(activityPoints)} />
+              <path className="activity-line" d={activityLinePath(activityPoints)} />
+            </svg>
           </div>
-          <span className="section-chip">
-            <Database size={14} />
-            Registry
-          </span>
-        </div>
+          <div className="activity-stats">
+            <span>
+              <strong>{recentAudit}</strong>
+              audit events
+            </span>
+            <span>
+              <strong>{healthStatus?.runtime ?? "FastAPI"}</strong>
+              runtime
+            </span>
+            <span>
+              <strong>{healthStatus?.database ?? "SQLite"}</strong>
+              database
+            </span>
+          </div>
+        </article>
 
-        <div className="module-grid">
-          {modules.map((module) => (
-            <article className={`module-card ${moduleCardState(module)}`} key={module.slug}>
-              <div className="module-card-header">
-                <h3>{module.name}</h3>
-                <span className="state-pill">
-                  {module.state === "enabled" ? <ShieldCheck size={14} /> : <Lock size={14} />}
+        <article className="overview-panel jobs-panel">
+          <PanelHeader eyebrow="Operations" icon={<GitBranch size={16} />} title="Jobs by Status" />
+          <div className="jobs-donut-wrap">
+            <div className="jobs-donut" style={jobDonutStyle}>
+              <span>{recentJobs}</span>
+            </div>
+            <div className="jobs-legend">
+              <span><i className="legend-dot done" />Completed</span>
+              <span><i className="legend-dot queued" />Queued</span>
+              <span><i className="legend-dot review" />Review</span>
+            </div>
+          </div>
+        </article>
+
+        <article className="overview-panel activity-list-panel">
+          <PanelHeader eyebrow="Timeline" icon={<Sparkles size={16} />} title="Recent Activity" />
+          <div className="activity-timeline">
+            <TimelineItem
+              detail={`${recentAudit} audit events in the last 24 hours`}
+              label="Audit stream active"
+              tone="cyan"
+            />
+            <TimelineItem
+              detail={`${recentJobs} recent jobs recorded`}
+              label="Job queue observed"
+              tone="purple"
+            />
+            <TimelineItem
+              detail={healthStatus?.local_server?.hostname ?? "Local server pending status"}
+              label="Local server check"
+              tone="blue"
+            />
+          </div>
+        </article>
+
+        <article className="overview-panel modules-snapshot-panel">
+          <PanelHeader eyebrow="Registry" icon={<Database size={16} />} title="Modules Snapshot" />
+          <div className="module-snapshot-grid">
+            {snapshotModules(modules).map((module) => (
+              <div className={`module-snapshot-item ${module.state}`} key={module.slug}>
+                <strong>{module.name}</strong>
+                <span>{moduleDescription(module.slug)}</span>
+                <em>
+                  {module.state === "enabled" ? <CheckCircle2 size={13} /> : <Lock size={13} />}
                   {moduleStatusLabel(module)}
-                </span>
+                </em>
               </div>
-              <p>{moduleDescription(module.slug)}</p>
-              {canManageModules && module.slug !== "core" ? (
-                <label className="module-control">
-                  <Settings size={14} />
-                  <select
-                    onChange={(event) =>
-                      onModuleStateChange(module.slug, event.target.value as ModuleState)
-                    }
-                    value={module.state}
-                  >
-                    <option value="available">Available</option>
-                    <option value="installed">Installed</option>
-                    <option value="enabled">Enabled</option>
-                    <option value="locked">Locked</option>
-                  </select>
-                </label>
-              ) : null}
-            </article>
-          ))}
-        </div>
+            ))}
+          </div>
+        </article>
       </section>
     </div>
   );
 }
 
-function MetricCard({ description, icon, label, tone = "default", value }: MetricCardProps) {
+function OverviewMetric({ description, icon, label, tone, value }: OverviewMetricProps) {
   return (
-    <div className={`summary-panel ${tone === "primary" ? "summary-panel-primary" : ""}`}>
-      <div className="summary-panel-header">
-        <span className="summary-icon">{icon}</span>
-        <span className="metric-label">{label}</span>
+    <article className={`overview-metric-card ${tone}`}>
+      <div className="overview-metric-top">
+        <span className="overview-metric-icon">{icon}</span>
+        <span>{label}</span>
       </div>
       <strong>{value}</strong>
       <p>{description}</p>
+    </article>
+  );
+}
+
+function PanelHeader({ eyebrow, icon, title }: { eyebrow: string; icon: ReactNode; title: string }) {
+  return (
+    <div className="overview-panel-header">
+      <div>
+        <span className="eyebrow">{eyebrow}</span>
+        <h3>{title}</h3>
+      </div>
+      <span className="overview-panel-icon">{icon}</span>
     </div>
   );
+}
+
+function TimelineItem({
+  detail,
+  label,
+  tone,
+}: {
+  detail: string;
+  label: string;
+  tone: "cyan" | "blue" | "purple";
+}) {
+  return (
+    <div className={`timeline-item ${tone}`}>
+      <span />
+      <div>
+        <strong>{label}</strong>
+        <p>{detail}</p>
+      </div>
+    </div>
+  );
+}
+
+function snapshotModules(modules: ModuleDefinition[]) {
+  const wanted = ["core", "backups", "logs", "nginx", "ssl", "docker", "kvm", "remote-access"];
+  const bySlug = new Map(modules.map((module) => [module.slug, module]));
+  return wanted.map((slug) => {
+    const existing = bySlug.get(slug);
+    if (existing) return existing;
+    return {
+      slug,
+      name: labelFromSlug(slug),
+      version: "0.0.0",
+      state: "locked" as ModuleState,
+      enabled: false,
+      locked: true,
+      installed: false,
+    };
+  });
+}
+
+function labelFromSlug(slug: string) {
+  return slug
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function activityLinePath(points: number[]) {
+  return points
+    .map((point, index) => {
+      const x = (index / (points.length - 1)) * 480;
+      const y = 170 - point * 1.45;
+      return `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
+    })
+    .join(" ");
+}
+
+function activityAreaPath(points: number[]) {
+  return `${activityLinePath(points)} L480 180 L0 180 Z`;
 }

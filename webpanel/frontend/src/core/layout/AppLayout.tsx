@@ -3,13 +3,17 @@ import {
   Archive,
   Bell,
   ClipboardList,
+  CircleHelp,
+  Command,
   Globe2,
   LayoutDashboard,
   LogOut,
+  PlayCircle,
   Server,
   RadioTower,
   SlidersHorizontal,
   ShieldCheck,
+  Sparkles,
   UserCircle,
   Users,
 } from "lucide-react";
@@ -46,10 +50,11 @@ export function AppLayout({
   onNotificationRead,
   onNotificationsOpen,
 }: AppLayoutProps) {
-  const corePages = [
-    { label: "Dashboard", path: "/", icon: LayoutDashboard, permission: "core.view" },
+  const infrastructurePages = [
     { label: "Server", path: "/server", icon: Server, permission: "core.view" },
     { label: "Agent", path: "/agent", icon: RadioTower, permission: "agent.view" },
+  ];
+  const operationsPages = [
     { label: "Notifications", path: "/notifications", icon: Bell, permission: "notifications.view" },
     { label: "Audit Log", path: "/audit", icon: ShieldCheck, permission: "audit.view" },
     { label: "Jobs", path: "/jobs", icon: ClipboardList, permission: "jobs.view" },
@@ -66,7 +71,30 @@ export function AppLayout({
     permission: "web.view",
     visible: webModule !== undefined && webModule.state !== "locked",
   };
+  const settingsPages = [usersPage, rolesPage, backupsPage, settingsPage];
+  const modulePages = hasPermission(webPage.permission) && webPage.visible ? [webPage] : [];
   const activeModule = modules.find((module) => module.slug === "core") ?? modules.find((module) => module.enabled);
+  const pageTitle = currentPath === "/" ? "Overview" : pageTitleForPath(currentPath);
+  const pageSubtitle =
+    currentPath === "/"
+      ? "Real-time overview of your HostPilot environment."
+      : "HostPilot controls and operational context.";
+  const renderNavItem = (page: NavPage, variant: "module" | "utility" = "module") => {
+    const Icon = page.icon;
+    return (
+      <button
+        className={`${variant === "module" ? "module-nav-item" : "utility-nav-item"} ${
+          currentPath === page.path ? "active" : ""
+        }`}
+        key={page.path}
+        onClick={() => onNavigate(page.path)}
+        type="button"
+      >
+        <span>{page.label}</span>
+        <Icon size={15} />
+      </button>
+    );
+  };
 
   return (
     <div className="app-shell">
@@ -79,42 +107,70 @@ export function AppLayout({
           </div>
         </div>
 
-        <nav className="module-nav" aria-label="Core navigation">
-          {corePages
-            .filter((page) => hasPermission(page.permission))
-            .map((page) => {
-              const Icon = page.icon;
-              return (
-                <button
-                  className={`module-nav-item ${currentPath === page.path ? "active" : ""}`}
-                  key={page.path}
-                  onClick={() => onNavigate(page.path)}
-                  type="button"
-                >
-                  <span>{page.label}</span>
-                  <Icon size={15} />
-                </button>
-              );
-            })}
+        <nav className="module-nav" aria-label="Primary navigation">
+          {renderNavItem({ label: "Overview", path: "/", icon: LayoutDashboard, permission: "core.view" })}
         </nav>
 
-        {hasPermission(webPage.permission) && webPage.visible ? (
-          <nav className="module-nav module-nav-secondary" aria-label="Web navigation">
-            <button
-              className={`module-nav-item ${currentPath === webPage.path ? "active" : ""}`}
-              onClick={() => onNavigate(webPage.path)}
-              type="button"
-            >
-              <span>{webPage.label}</span>
-              <Globe2 size={15} />
-            </button>
-          </nav>
+        <SidebarGroup
+          defaultOpen={["/server", "/agent"].includes(currentPath)}
+          label="Infrastructure"
+        >
+          {infrastructurePages.filter((page) => hasPermission(page.permission)).map((page) => renderNavItem(page))}
+        </SidebarGroup>
+
+        <SidebarGroup
+          defaultOpen={["/notifications", "/audit", "/jobs"].includes(currentPath)}
+          label="Operations"
+        >
+          {operationsPages.filter((page) => hasPermission(page.permission)).map((page) => renderNavItem(page))}
+        </SidebarGroup>
+
+        {modulePages.length > 0 ? (
+          <SidebarGroup defaultOpen={currentPath === "/web"} label="Modules">
+            {modulePages.map((page) => renderNavItem(page))}
+          </SidebarGroup>
         ) : null}
+
+        <SidebarGroup
+          defaultOpen={["/users", "/roles", "/backups", "/settings"].includes(currentPath)}
+          label="Settings"
+        >
+          {settingsPages
+            .filter((page) => hasPermission(page.permission))
+            .map((page) => renderNavItem(page, "utility"))}
+        </SidebarGroup>
 
         <div className="sidebar-spacer" />
 
+        <div className="quick-actions" aria-label="Quick Actions">
+          <span className="sidebar-section-label">Quick Actions</span>
+          {hasPermission("audit.view") ? (
+            <button className="quick-action-button" onClick={() => onNavigate("/audit")} type="button">
+              <ShieldCheck size={14} />
+              Run Audit
+            </button>
+          ) : null}
+          {hasPermission("web.view") && webPage.visible ? (
+            <button className="quick-action-button" onClick={() => onNavigate("/web")} type="button">
+              <Globe2 size={14} />
+              View Logs
+            </button>
+          ) : null}
+          {hasPermission("core.backup.view") ? (
+            <button className="quick-action-button" onClick={() => onNavigate("/backups")} type="button">
+              <Archive size={14} />
+              Create Backup
+            </button>
+          ) : null}
+          {hasPermission("jobs.view") ? (
+            <button className="quick-action-button" onClick={() => onNavigate("/jobs")} type="button">
+              <PlayCircle size={14} />
+              New Job
+            </button>
+          ) : null}
+        </div>
+
         <div className="sidebar-footer">
-          <span className="sidebar-section-label">Platform context</span>
           <div className="module-context" aria-label="Active platform module">
             <div>
               <strong>{activeModule?.name ?? "Core"}</strong>
@@ -122,23 +178,6 @@ export function AppLayout({
             </div>
             <ShieldCheck size={15} />
           </div>
-
-          {[usersPage, rolesPage, backupsPage, settingsPage]
-            .filter((page) => hasPermission(page.permission))
-            .map((page) => {
-              const Icon = page.icon;
-              return (
-                <button
-                  className={`utility-nav-item ${currentPath === page.path ? "active" : ""}`}
-                  key={page.path}
-                  onClick={() => onNavigate(page.path)}
-                  type="button"
-                >
-                  <span>{page.label}</span>
-                  <Icon size={15} />
-                </button>
-              );
-            })}
         </div>
       </aside>
 
@@ -146,25 +185,33 @@ export function AppLayout({
         <header className="topbar">
           <div>
             <span className="eyebrow">Local server</span>
-            <h1>Core Platform</h1>
+            <h1>{pageTitle}</h1>
+            <p>{pageSubtitle}</p>
           </div>
           <div className="status-strip" aria-label="Core status">
-            <span>
+            <span className="status-chip-operational">
               <ShieldCheck size={16} />
-              Mock agent
+              All Systems Operational
             </span>
+            <button className="utility-chip" onClick={() => onNavigate("/server")} type="button">
+              <Sparkles size={16} />
+              Live Checks
+            </button>
             <span>
               <Activity size={16} />
               SQLite
-            </span>
-            <span>
-              <UserCircle size={16} />
-              {currentUser.display_name}
             </span>
             <button className="icon-button notification-button" onClick={onNotificationsOpen} type="button" aria-label="Notifications">
               <Bell size={18} />
               {unreadNotifications > 0 ? <span className="badge-dot">{unreadNotifications}</span> : null}
             </button>
+            <button className="icon-button" onClick={() => onNavigate("/settings")} type="button" aria-label="Help">
+              <CircleHelp size={18} />
+            </button>
+            <span>
+              <UserCircle size={16} />
+              {currentUser.display_name}
+            </span>
             <div className="notification-popover">
               {notifications.slice(0, 4).map((notification) => (
                 <button
@@ -192,4 +239,47 @@ export function AppLayout({
       </div>
     </div>
   );
+}
+
+interface NavPage {
+  label: string;
+  path: string;
+  icon: typeof LayoutDashboard;
+  permission: string;
+}
+
+function SidebarGroup({
+  children,
+  defaultOpen,
+  label,
+}: {
+  children: ReactNode;
+  defaultOpen: boolean;
+  label: string;
+}) {
+  return (
+    <details className="sidebar-group" open={defaultOpen}>
+      <summary>
+        <span>{label}</span>
+        <Command size={13} />
+      </summary>
+      <div className="sidebar-group-items">{children}</div>
+    </details>
+  );
+}
+
+function pageTitleForPath(path: string) {
+  const titles: Record<string, string> = {
+    "/server": "Server",
+    "/agent": "Agent",
+    "/notifications": "Notifications",
+    "/audit": "Audit Log",
+    "/jobs": "Jobs",
+    "/web": "Web",
+    "/users": "Users",
+    "/roles": "Roles",
+    "/backups": "Backups",
+    "/settings": "Settings",
+  };
+  return titles[path] ?? "Overview";
 }

@@ -598,6 +598,16 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                     <td>
                       <div className="web-site-actions">
                         <button
+                          className="icon-text-button web-files-action"
+                          disabled={!canViewSites}
+                          onClick={() => handleViewFiles(site)}
+                          title="Open read-only file browser for this site"
+                          type="button"
+                        >
+                          <FolderOpen size={15} />
+                          Browse Files
+                        </button>
+                        <button
                           className="icon-text-button"
                           disabled={!canViewSites}
                           onClick={() => handlePreviewNginxConfig(site.id)}
@@ -632,15 +642,6 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                         >
                           <ScrollText size={15} />
                           Logs
-                        </button>
-                        <button
-                          className="icon-text-button"
-                          disabled={!canViewSites}
-                          onClick={() => handleViewFiles(site)}
-                          type="button"
-                        >
-                          <FolderOpen size={15} />
-                          Files
                         </button>
                         <button
                           className="icon-text-button state-disabled"

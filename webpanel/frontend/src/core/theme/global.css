@@ -1076,6 +1076,11 @@ textarea {
   gap: 8px;
 }
 
+.web-files-action {
+  border-color: #2e7d68;
+  color: #b9f3df;
+}
+
 .nginx-preview-modal {
   max-width: min(860px, calc(100vw - 32px));
 }

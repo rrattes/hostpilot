@@ -1136,6 +1136,18 @@ textarea {
   flex: 0 0 100%;
 }
 
+.web-logs-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.web-log-viewer {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
 .dry-run-confirmation {
   color: #c7d0dc;
   display: grid;

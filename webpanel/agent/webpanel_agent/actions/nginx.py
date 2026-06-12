@@ -8,6 +8,8 @@ from typing import Any, Protocol
 
 DEFAULT_ALLOWED_WEBROOT_BASE = "/var/www/hostpilot-sites"
 DEFAULT_ALLOWED_NGINX_BASE = "/etc/nginx/sites-available/hostpilot"
+DEFAULT_ALLOWED_LOG_BASE = "/var/log/nginx/hostpilot"
+MAX_LOG_LINES = 500
 DOMAIN_PATTERN = re.compile(
     r"^(?=.{1,253}$)(?!-)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
 )
@@ -197,6 +199,26 @@ def disable_site_config(
     }
 
 
+def tail_site_logs(
+    payload: dict[str, Any],
+    *,
+    filesystem: Filesystem | None = None,
+) -> dict[str, Any]:
+    fs = filesystem or LocalFilesystem()
+    request = _validated_logs_request(payload)
+    access_log = _tail_log_file(fs, request["access_log_path"], request["line_limit"])
+    error_log = _tail_log_file(fs, request["error_log_path"], request["line_limit"])
+    return {
+        "status": "completed",
+        "domain": request["domain"],
+        "line_limit": request["line_limit"],
+        "logs": {
+            "access": access_log,
+            "error": error_log,
+        },
+    }
+
+
 def _validated_request(payload: dict[str, Any]) -> dict[str, str]:
     domain = _required_string(payload, "domain").lower()
     if not DOMAIN_PATTERN.fullmatch(domain):
@@ -237,6 +259,48 @@ def _validated_request(payload: dict[str, Any]) -> dict[str, str]:
         "webroot_path": webroot_path,
         "target_config_path": target_config_path,
         "config_content": config_content,
+    }
+
+
+def _validated_logs_request(payload: dict[str, Any]) -> dict[str, Any]:
+    domain = _required_string(payload, "domain").lower()
+    if not DOMAIN_PATTERN.fullmatch(domain):
+        raise ValueError("Invalid domain.")
+
+    allowed_log_base = _safe_base(
+        payload.get("allowed_log_base", DEFAULT_ALLOWED_LOG_BASE),
+        "allowed log base",
+    )
+    line_limit = payload.get("line_limit", 100)
+    if not isinstance(line_limit, int) or isinstance(line_limit, bool):
+        raise ValueError("line_limit must be an integer.")
+    if line_limit < 1:
+        raise ValueError("line_limit must be at least 1.")
+    line_limit = min(line_limit, MAX_LOG_LINES)
+
+    expected_access_log_path = f"{allowed_log_base}/{domain}.access.log"
+    expected_error_log_path = f"{allowed_log_base}/{domain}.error.log"
+    access_log_path = _safe_child_path(
+        str(payload.get("access_log_path", expected_access_log_path)),
+        allowed_log_base,
+        "access log path",
+    )
+    error_log_path = _safe_child_path(
+        str(payload.get("error_log_path", expected_error_log_path)),
+        allowed_log_base,
+        "error log path",
+    )
+    if access_log_path != expected_access_log_path:
+        raise ValueError("Access log path must match the site domain under the allowed log path.")
+    if error_log_path != expected_error_log_path:
+        raise ValueError("Error log path must match the site domain under the allowed log path.")
+
+    return {
+        "domain": domain,
+        "allowed_log_base": allowed_log_base,
+        "line_limit": line_limit,
+        "access_log_path": access_log_path,
+        "error_log_path": error_log_path,
     }
 
 
@@ -290,6 +354,21 @@ def _safe_child_path(path: str, base: str, label: str) -> str:
     if normalized != base and not normalized.startswith(f"{base}/"):
         raise ValueError(f"{label} must stay under {base}.")
     return normalized
+
+
+def _tail_log_file(fs: Filesystem, path: str, line_limit: int) -> dict[str, Any]:
+    if not fs.exists(path):
+        return {
+            "path": path,
+            "missing": True,
+            "lines": [],
+        }
+    content = fs.read_text(path)
+    return {
+        "path": path,
+        "missing": False,
+        "lines": content.splitlines()[-line_limit:],
+    }
 
 
 def _command_result(result: CommandResult) -> dict[str, Any]:

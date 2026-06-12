@@ -87,7 +87,14 @@ def test_web_status_is_placeholder_only() -> None:
         "logs",
         "php-runtime",
     ]
-    assert all(section["action_available"] is False for section in payload["sections"])
+    actions_by_slug = {section["slug"]: section["action_available"] for section in payload["sections"]}
+    assert actions_by_slug == {
+        "sites": False,
+        "nginx": False,
+        "ssl": False,
+        "logs": True,
+        "php-runtime": False,
+    }
 
 
 def test_web_status_requires_web_view_permission() -> None:
@@ -1144,6 +1151,172 @@ def test_controlled_nginx_reapply_requires_disabled_or_error_status() -> None:
     assert response.status_code == 409
 
 
+def test_web_site_logs_calls_agent_with_allowed_log_base_and_returns_lines(monkeypatch) -> None:
+    captured_payload: dict[str, object] | None = None
+
+    def fake_execute_agent_action(db: Session, *, action: str, payload: dict[str, object], user: User):
+        nonlocal captured_payload
+        captured_payload = payload
+        from app.db.models import Job
+
+        job = Job(
+            type="agent_action",
+            module="agent",
+            action=action,
+            status="completed",
+            payload="{}",
+            result="{}",
+        )
+        db.add(job)
+        db.flush()
+        return job, AgentActionResponse(
+            success=True,
+            status="completed",
+            data={
+                "line_limit": 2,
+                "logs": {
+                    "access": {
+                        "path": "/var/log/nginx/hostpilot/logs-agent.example.com.access.log",
+                        "missing": False,
+                        "lines": ["access-1", "access-2"],
+                    },
+                    "error": {
+                        "path": "/var/log/nginx/hostpilot/logs-agent.example.com.error.log",
+                        "missing": False,
+                        "lines": ["error-1"],
+                    },
+                },
+            },
+            error=None,
+            duration_ms=2,
+        )
+
+    monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    token = _token_with_permissions(["web.sites.view"])
+    client = TestClient(app)
+    created = _site_record("logs-agent.example.com")
+
+    response = client.get(
+        f"/api/core/web/sites/{created['id']}/logs?lines=2",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["access"]["lines"] == ["access-1", "access-2"]
+    assert payload["error"]["lines"] == ["error-1"]
+    assert captured_payload == {
+        "domain": "logs-agent.example.com",
+        "line_limit": 2,
+        "allowed_log_base": "/var/log/nginx/hostpilot",
+    }
+
+    with TestingSessionLocal() as db:
+        audit_action = (
+            db.query(AuditEvent.action)
+            .filter(
+                AuditEvent.target_type == "web_site",
+                AuditEvent.target_id == str(created["id"]),
+                AuditEvent.action == "web.site.logs.accessed",
+            )
+            .one()[0]
+        )
+    assert audit_action == "web.site.logs.accessed"
+
+
+def test_web_site_logs_preserves_missing_log_file_state(monkeypatch) -> None:
+    def fake_execute_agent_action(db: Session, *, action: str, payload: dict[str, object], user: User):
+        from app.db.models import Job
+
+        job = Job(
+            type="agent_action",
+            module="agent",
+            action=action,
+            status="completed",
+            payload="{}",
+            result="{}",
+        )
+        db.add(job)
+        db.flush()
+        return job, AgentActionResponse(
+            success=True,
+            status="completed",
+            data={
+                "line_limit": 100,
+                "logs": {
+                    "access": {"path": "/var/log/nginx/hostpilot/missing.example.com.access.log", "missing": True, "lines": []},
+                    "error": {"path": "/var/log/nginx/hostpilot/missing.example.com.error.log", "missing": True, "lines": []},
+                },
+            },
+            error=None,
+            duration_ms=2,
+        )
+
+    monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    token = _token_with_permissions(["web.sites.view"])
+    client = TestClient(app)
+    created = _site_record("missing.example.com")
+
+    response = client.get(
+        f"/api/core/web/sites/{created['id']}/logs",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["access"]["missing"] is True
+    assert response.json()["access"]["lines"] == []
+    assert response.json()["error"]["missing"] is True
+
+
+def test_web_site_logs_rejects_line_limit_above_max() -> None:
+    token = _token_with_permissions(["web.sites.view"])
+    client = TestClient(app)
+    created = _site_record("logs-limit.example.com")
+
+    response = client.get(
+        f"/api/core/web/sites/{created['id']}/logs?lines=501",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_web_site_logs_returns_error_when_agent_rejects_unsafe_path(monkeypatch) -> None:
+    def fake_execute_agent_action(db: Session, *, action: str, payload: dict[str, object], user: User):
+        from app.db.models import Job
+
+        job = Job(
+            type="agent_action",
+            module="agent",
+            action=action,
+            status="rejected",
+            payload="{}",
+            result="{}",
+        )
+        db.add(job)
+        db.flush()
+        return job, AgentActionResponse(
+            success=False,
+            status="rejected",
+            data={},
+            error="Access log path must match the site domain under the allowed log path.",
+            duration_ms=2,
+        )
+
+    monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    token = _token_with_permissions(["web.sites.view"])
+    client = TestClient(app)
+    created = _site_record("logs-reject.example.com")
+
+    response = client.get(
+        f"/api/core/web/sites/{created['id']}/logs",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 502
+    assert "Access log path" in response.json()["detail"]
+
+
 def _ready_site(client: TestClient, token: str, domain: str) -> dict[str, object]:
     created = client.post(
         "/api/core/web/sites",
@@ -1164,6 +1337,22 @@ def _ready_site(client: TestClient, token: str, domain: str) -> dict[str, object
         headers={"Authorization": f"Bearer {token}"},
     )
     return created
+
+
+def _site_record(domain: str) -> dict[str, object]:
+    with TestingSessionLocal() as db:
+        site = WebSite(
+            domain=domain,
+            root_path=f"/var/www/hostpilot-sites/{domain}",
+            status="config_pending",
+            provisioning_status="draft",
+            php_runtime="php-8.3",
+            ssl_enabled=False,
+        )
+        db.add(site)
+        db.commit()
+        db.refresh(site)
+        return {"id": site.id, "domain": site.domain}
 
 
 def _applied_site(client: TestClient, token: str, domain: str) -> dict[str, object]:

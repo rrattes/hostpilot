@@ -1,6 +1,11 @@
 import pytest
 
-from webpanel_agent.actions.nginx import CommandResult, apply_site_config, disable_site_config
+from webpanel_agent.actions.nginx import (
+    CommandResult,
+    apply_site_config,
+    disable_site_config,
+    tail_site_logs,
+)
 from webpanel_agent.contracts import AgentActionRequest
 from webpanel_agent.actions.mock import run_mock_action
 from webpanel_agent.policies.allowlist import allowed_actions
@@ -42,6 +47,7 @@ class FakeRunner:
 def test_nginx_apply_action_is_allowlisted() -> None:
     assert "web.nginx.apply_site_config" in allowed_actions()
     assert "web.nginx.disable_site_config" in allowed_actions()
+    assert "web.logs.tail_site_logs" in allowed_actions()
 
 
 def test_apply_site_config_success_uses_fixed_commands_and_paths() -> None:
@@ -166,6 +172,67 @@ def test_run_mock_action_dispatches_controlled_nginx_disable() -> None:
     assert response.status == "rejected"
 
 
+def test_tail_site_logs_reads_allowed_site_logs() -> None:
+    fs = FakeFilesystem()
+    fs.files["/var/log/nginx/hostpilot/example.com.access.log"] = "a1\na2\na3\n"
+    fs.files["/var/log/nginx/hostpilot/example.com.error.log"] = "e1\ne2\n"
+
+    result = tail_site_logs(_logs_payload(2), filesystem=fs)
+
+    assert result["status"] == "completed"
+    assert result["line_limit"] == 2
+    assert result["logs"]["access"]["lines"] == ["a2", "a3"]
+    assert result["logs"]["error"]["lines"] == ["e1", "e2"]
+    assert result["logs"]["access"]["missing"] is False
+
+
+def test_tail_site_logs_rejects_unsafe_path() -> None:
+    payload = _logs_payload(20)
+    payload["access_log_path"] = "/var/log/nginx/default/access.log"
+
+    with pytest.raises(ValueError):
+        tail_site_logs(payload, filesystem=FakeFilesystem())
+
+
+def test_tail_site_logs_clamps_max_lines() -> None:
+    fs = FakeFilesystem()
+    fs.files["/var/log/nginx/hostpilot/example.com.access.log"] = "\n".join(
+        f"line-{index}" for index in range(700)
+    )
+    fs.files["/var/log/nginx/hostpilot/example.com.error.log"] = ""
+
+    result = tail_site_logs(_logs_payload(900), filesystem=fs)
+
+    assert result["line_limit"] == 500
+    assert len(result["logs"]["access"]["lines"]) == 500
+    assert result["logs"]["access"]["lines"][0] == "line-200"
+
+
+def test_tail_site_logs_returns_missing_log_file_state() -> None:
+    result = tail_site_logs(_logs_payload(50), filesystem=FakeFilesystem())
+
+    assert result["logs"]["access"]["missing"] is True
+    assert result["logs"]["access"]["lines"] == []
+    assert result["logs"]["error"]["missing"] is True
+
+
+def test_run_mock_action_dispatches_web_log_tail() -> None:
+    response = run_mock_action(
+        AgentActionRequest(
+            action="web.logs.tail_site_logs",
+            payload={
+                **_logs_payload(20),
+                "access_log_path": "/var/log/nginx/default/access.log",
+            },
+            requested_by="test",
+            request_id="req-3",
+        )
+    )
+
+    assert response.success is False
+    assert response.status == "rejected"
+
+
 def _payload() -> dict[str, str]:
     config = """server {
     listen 80;
@@ -189,4 +256,12 @@ def _disable_payload() -> dict[str, str]:
         "domain": "example.com",
         "target_config_path": "/etc/nginx/sites-available/hostpilot/example.com.conf",
         "allowed_nginx_base": "/etc/nginx/sites-available/hostpilot",
+    }
+
+
+def _logs_payload(line_limit: int) -> dict[str, object]:
+    return {
+        "domain": "example.com",
+        "line_limit": line_limit,
+        "allowed_log_base": "/var/log/nginx/hostpilot",
     }

@@ -9,6 +9,7 @@ ALLOWED_MOCK_ACTIONS = {
     "mock.system_info",
     "web.nginx.apply_site_config",
     "web.nginx.disable_site_config",
+    "web.logs.tail_site_logs",
 }
 
 
@@ -55,6 +56,15 @@ def run_mock_action(request: AgentActionRequest) -> AgentActionResponse:
             "rejected",
             {},
             "Local agent is required for controlled Nginx disable.",
+            started_at,
+        )
+
+    if request.action == "web.logs.tail_site_logs":
+        return _response(
+            False,
+            "rejected",
+            {},
+            "Local agent is required for Web site log access.",
             started_at,
         )
 

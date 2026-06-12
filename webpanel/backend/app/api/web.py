@@ -3,7 +3,7 @@ import posixpath
 import re
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -22,6 +22,8 @@ router = APIRouter()
 SectionStatus = Literal["unavailable", "coming_soon"]
 ProvisioningStatus = Literal["draft", "config_previewed", "ready_to_apply", "disabled", "error"]
 DEFAULT_WEB_SITES_BASE_PATH = "/var/www/hostpilot-sites"
+DEFAULT_WEB_LOG_BASE_PATH = "/var/log/nginx/hostpilot"
+MAX_WEB_LOG_LINES = 500
 DANGEROUS_ROOT_PATHS = {"/", "/bin", "/etc", "/home", "/usr", "/var"}
 DOMAIN_PATTERN = re.compile(
     r"^(?=.{1,253}$)(?!-)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$"
@@ -164,6 +166,22 @@ class WebSiteReapplyRead(BaseModel):
     error: str | None
 
 
+class WebSiteLogFileRead(BaseModel):
+    path: str
+    missing: bool
+    lines: list[str]
+
+
+class WebSiteLogsRead(BaseModel):
+    site_id: int
+    domain: str
+    line_limit: int
+    job_id: int
+    status: str
+    access: WebSiteLogFileRead
+    error: WebSiteLogFileRead
+
+
 WEB_SECTIONS = [
     WebSectionStatus(
         slug="sites",
@@ -193,9 +211,9 @@ WEB_SECTIONS = [
         slug="logs",
         name="Logs",
         status="coming_soon",
-        description="Web log browsing and retention controls are placeholder-only.",
-        action_label="Log viewer coming soon",
-        action_available=False,
+        description="Read-only recent access and error log tails are available per site.",
+        action_label="Open logs from a site row",
+        action_available=True,
     ),
     WebSectionStatus(
         slug="php-runtime",
@@ -244,6 +262,66 @@ def list_web_sites(db: Session = Depends(get_db)) -> list[WebSiteRead]:
 )
 def get_web_site(site_id: int, db: Session = Depends(get_db)) -> WebSiteRead:
     return _site_read(_site_or_404(db, site_id))
+
+
+@router.get(
+    "/web/sites/{site_id}/logs",
+    response_model=WebSiteLogsRead,
+    dependencies=[Depends(require_permission("web.sites.view"))],
+)
+def get_web_site_logs(
+    site_id: int,
+    lines: int = Query(default=100, ge=1, le=MAX_WEB_LOG_LINES),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> WebSiteLogsRead:
+    site = _site_or_404(db, site_id)
+    agent_payload = _agent_logs_payload(site, lines)
+    record_audit_event(
+        db,
+        action="web.site.logs.accessed",
+        target_type="web_site",
+        target_id=str(site.id),
+        outcome="success",
+        actor_user_id=user.id,
+        metadata={"domain": site.domain, "line_limit": str(lines), "read_only": "true"},
+    )
+    job, response = execute_mock_agent_action(
+        db,
+        action="web.logs.tail_site_logs",
+        payload=agent_payload,
+        user=user,
+    )
+    if not response.success:
+        record_audit_event(
+            db,
+            action="web.site.logs.access_failed",
+            target_type="web_site",
+            target_id=str(site.id),
+            outcome="failure",
+            actor_user_id=user.id,
+            metadata={"domain": site.domain, "agent_status": response.status},
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=response.error or "Unable to read Web site logs.",
+        )
+
+    logs = response.data.get("logs", {})
+    access_log = logs.get("access", {}) if isinstance(logs, dict) else {}
+    error_log = logs.get("error", {}) if isinstance(logs, dict) else {}
+    db.commit()
+    db.refresh(job)
+    return WebSiteLogsRead(
+        site_id=site.id,
+        domain=site.domain,
+        line_limit=int(response.data.get("line_limit", lines)),
+        job_id=job.id,
+        status=response.status,
+        access=_log_file_read(access_log),
+        error=_log_file_read(error_log),
+    )
 
 
 @router.post(
@@ -1039,6 +1117,25 @@ def _agent_disable_payload(site: WebSite) -> dict[str, object]:
         "target_config_path": plan.target_config_path,
         "allowed_nginx_base": "/etc/nginx/sites-available/hostpilot",
     }
+
+
+def _agent_logs_payload(site: WebSite, lines: int) -> dict[str, object]:
+    return {
+        "domain": site.domain,
+        "line_limit": min(lines, MAX_WEB_LOG_LINES),
+        "allowed_log_base": DEFAULT_WEB_LOG_BASE_PATH,
+    }
+
+
+def _log_file_read(payload: object) -> WebSiteLogFileRead:
+    if not isinstance(payload, dict):
+        return WebSiteLogFileRead(path="", missing=True, lines=[])
+    lines = payload.get("lines", [])
+    return WebSiteLogFileRead(
+        path=str(payload.get("path", "")),
+        missing=bool(payload.get("missing", True)),
+        lines=[str(line) for line in lines] if isinstance(lines, list) else [],
+    )
 
 
 def _nginx_disable_confirmation_phrase(site: WebSite) -> str:

@@ -16,6 +16,7 @@ def test_health_check() -> None:
     assert health_check()["allowed_actions"] == [
         "mock.health",
         "mock.system_info",
+        "web.logs.tail_site_logs",
         "web.nginx.apply_site_config",
         "web.nginx.disable_site_config",
     ]

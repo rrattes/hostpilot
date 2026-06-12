@@ -5,6 +5,7 @@ import {
   Globe2,
   Lock,
   Plus,
+  RefreshCw,
   ScrollText,
   ServerCog,
   ShieldAlert,
@@ -18,6 +19,7 @@ import {
   disableWebSite,
   disableWebSiteNginxConfig,
   getWebSiteNginxApplyPlan,
+  getWebSiteLogs,
   getWebSiteReadiness,
   getWebStatus,
   listWebSites,
@@ -31,6 +33,8 @@ import {
   type WebSiteApplyResult,
   type WebSiteDisableResult,
   type WebSiteDryRunResult,
+  type WebSiteLogFile,
+  type WebSiteLogs,
   type WebSiteNginxApplyPlan,
   type WebSiteNginxPreview,
   type WebSiteReadiness,
@@ -79,6 +83,9 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
   const [reapplyTarget, setReapplyTarget] = useState<WebSite | null>(null);
   const [reapplyPhrase, setReapplyPhrase] = useState("");
   const [reapplyResult, setReapplyResult] = useState<WebSiteReapplyResult | null>(null);
+  const [logsTarget, setLogsTarget] = useState<WebSite | null>(null);
+  const [logsResult, setLogsResult] = useState<WebSiteLogs | null>(null);
+  const [logsLoading, setLogsLoading] = useState(false);
   const sections = useMemo(() => status?.sections ?? fallbackSections(), [status]);
 
   useEffect(() => {
@@ -341,6 +348,30 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
     setSiteError(null);
   }
 
+  async function handleViewLogs(site: WebSite) {
+    setLogsTarget(site);
+    await refreshLogs(site);
+  }
+
+  async function refreshLogs(site = logsTarget) {
+    if (!token || !site || !canViewSites) return;
+
+    try {
+      setLogsLoading(true);
+      setLogsResult(await getWebSiteLogs(token, site.id, 100));
+      setSiteError(null);
+    } catch (logsError) {
+      setSiteError(
+        logsError instanceof ApiError
+          ? logsError.message
+          : "Unable to load Web site logs.",
+      );
+      setLogsResult(null);
+    } finally {
+      setLogsLoading(false);
+    }
+  }
+
   return (
     <section className="data-page web-page" aria-label="Web module">
       <div className="section-heading">
@@ -367,8 +398,9 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
         <div>
           <strong>Read-only scaffold</strong>
           <span>
-            This page manages Web site records and controlled Nginx workflows only. SSL, PHP
-            management, log browsing, deploy changes, and arbitrary Agent actions remain disabled.
+            This page manages Web site records, controlled Nginx workflows, and read-only log
+            tails only. SSL, PHP management, deploy changes, and arbitrary Agent actions remain
+            disabled.
           </span>
         </div>
       </div>
@@ -392,7 +424,7 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
             <span className="metric-label">Operational</span>
           </div>
           <strong>{status?.operational ? "Active" : "No"}</strong>
-          <p>Only controlled HostPilot Nginx apply and disable workflows are available.</p>
+          <p>Controlled HostPilot Nginx workflows and bounded read-only log tails are available.</p>
         </div>
       </div>
 
@@ -546,6 +578,15 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                         >
                           <FileText size={15} />
                           View Apply Plan
+                        </button>
+                        <button
+                          className="icon-text-button"
+                          disabled={!canViewSites}
+                          onClick={() => handleViewLogs(site)}
+                          type="button"
+                        >
+                          <ScrollText size={15} />
+                          Logs
                         </button>
                         <button
                           className="icon-text-button state-disabled"
@@ -806,6 +847,61 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
           </section>
         </div>
       ) : null}
+
+      {logsTarget ? (
+        <div className="modal-backdrop" role="presentation">
+          <section className="confirm-modal nginx-preview-modal" aria-label="Web site logs">
+            <div>
+              <span className="eyebrow">Read-only logs</span>
+              <h2>{logsTarget.domain}</h2>
+            </div>
+            <p>
+              Recent HostPilot-managed access and error log lines only. No full download, delete,
+              truncate, or arbitrary file access is available.
+            </p>
+            <div className="modal-actions">
+              <button
+                className="icon-text-button"
+                disabled={logsLoading}
+                onClick={() => refreshLogs()}
+                type="button"
+              >
+                <RefreshCw size={15} />
+                Refresh
+              </button>
+            </div>
+            {logsLoading ? <span className="empty-table-note">Loading logs.</span> : null}
+            {logsResult ? (
+              <div className="web-logs-grid">
+                <LogViewer title="Access log" log={logsResult.access} />
+                <LogViewer title="Error log" log={logsResult.error} />
+              </div>
+            ) : !logsLoading ? (
+              <span className="empty-table-note">No log response loaded.</span>
+            ) : null}
+            {logsResult ? (
+              <div className="apply-plan-section">
+                <strong>Agent job</strong>
+                <code className="path-code">#{logsResult.job_id}</code>
+                <code className="path-code">{logsResult.status}</code>
+                <code className="path-code">{logsResult.line_limit} lines max</code>
+              </div>
+            ) : null}
+            <div className="modal-actions">
+              <button
+                className="icon-text-button"
+                onClick={() => {
+                  setLogsTarget(null);
+                  setLogsResult(null);
+                }}
+                type="button"
+              >
+                Close
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -873,6 +969,26 @@ function DryRunResultPanel({ result }: { result: WebSiteDryRunResult }) {
       <pre className="config-preview-block">
         <code>{result.config_content}</code>
       </pre>
+    </div>
+  );
+}
+
+function LogViewer({ title, log }: { title: string; log: WebSiteLogFile }) {
+  return (
+    <div className="web-log-viewer">
+      <div className="apply-plan-section">
+        <strong>{title}</strong>
+        <code className="path-code">{log.path || "path unavailable"}</code>
+      </div>
+      {log.missing ? (
+        <span className="empty-table-note">Log file does not exist yet.</span>
+      ) : log.lines.length === 0 ? (
+        <span className="empty-table-note">Log file is empty.</span>
+      ) : (
+        <pre className="config-preview-block">
+          <code>{log.lines.join("\n")}</code>
+        </pre>
+      )}
     </div>
   );
 }

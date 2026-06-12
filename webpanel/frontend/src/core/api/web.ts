@@ -100,6 +100,22 @@ export interface WebSiteApplyResult {
 export type WebSiteDisableResult = WebSiteApplyResult;
 export type WebSiteReapplyResult = WebSiteApplyResult;
 
+export interface WebSiteLogFile {
+  path: string;
+  missing: boolean;
+  lines: string[];
+}
+
+export interface WebSiteLogs {
+  site_id: number;
+  domain: string;
+  line_limit: number;
+  job_id: number;
+  status: string;
+  access: WebSiteLogFile;
+  error: WebSiteLogFile;
+}
+
 export function getWebStatus(token: string) {
   return apiRequest<WebStatus>("/api/core/web/status", { token });
 }
@@ -218,5 +234,11 @@ export function reapplyWebSiteNginxConfig(
     method: "POST",
     token,
     body: { confirmation_phrase: confirmationPhrase },
+  });
+}
+
+export function getWebSiteLogs(token: string, siteId: number, lines = 100) {
+  return apiRequest<WebSiteLogs>(`/api/core/web/sites/${siteId}/logs?lines=${lines}`, {
+    token,
   });
 }

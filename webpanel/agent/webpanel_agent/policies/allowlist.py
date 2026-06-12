@@ -3,6 +3,7 @@ ALLOWED_ACTIONS = {
     "mock.system_info",
     "web.nginx.apply_site_config",
     "web.nginx.disable_site_config",
+    "web.logs.tail_site_logs",
 }
 
 

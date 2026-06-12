@@ -49,7 +49,10 @@ export function DashboardPage({
     healthStatus?.enabled_modules_count ?? modules.filter((module) => module.state === "enabled").length;
   const lockedModules =
     healthStatus?.locked_modules_count ?? modules.filter((module) => module.state === "locked").length;
-  const issueCount = Number(healthStatus?.database_status !== "ok") + Number(agentStatus?.status === "error");
+  const agentAvailability = agentStatus?.status ?? healthStatus?.agent_status;
+  const issueCount =
+    Number(healthStatus?.database_status !== "ok") +
+    Number(agentAvailability === "fallback" || agentAvailability === "unavailable");
   const recentJobs = healthStatus?.recent_jobs_count ?? 0;
   const recentAudit = healthStatus?.recent_audit_events_count ?? 0;
   const jobDonutStyle = {
@@ -74,7 +77,7 @@ export function DashboardPage({
           </span>
           <span>
             <RadioTower size={16} />
-            Agent {agentStatus?.status ?? "checking"}
+            Agent {agentAvailability ? agentStatusLabel(agentAvailability) : "checking"}
           </span>
         </div>
       </section>
@@ -82,7 +85,7 @@ export function DashboardPage({
       <section className="overview-metrics" aria-label="Summary metrics">
         <OverviewMetric
           description={`Database ${healthStatus?.database_status ?? "checking"} / Agent ${
-            healthStatus?.agent_mock_status ?? "checking"
+            agentAvailability ? agentStatusLabel(agentAvailability) : "checking"
           }`}
           icon={<ShieldCheck size={20} />}
           label="Core Status"
@@ -206,6 +209,12 @@ export function DashboardPage({
       </section>
     </div>
   );
+}
+
+function agentStatusLabel(status: AgentStatus["status"]) {
+  if (status === "connected") return "connected";
+  if (status === "fallback") return "fallback";
+  return "unavailable";
 }
 
 function OverviewMetric({ description, icon, label, tone, value }: OverviewMetricProps) {

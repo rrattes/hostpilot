@@ -1,4 +1,5 @@
 import { apiRequest } from "./client";
+import type { AgentAvailability } from "./agent";
 
 export interface LocalServerStatus {
   slug: string;
@@ -14,10 +15,11 @@ export interface CoreHealthStatus {
   core_version: string;
   core_status: "ok";
   database_status: "ok" | "error";
-  agent_mock_status: "ok";
+  agent_status: AgentAvailability;
   runtime: string;
   database: string;
-  agent_mode: "mock";
+  agent_mode: string;
+  agent_web_actions_use_real_agent: boolean;
   local_server: LocalServerStatus | null;
   enabled_modules_count: number;
   locked_modules_count: number;

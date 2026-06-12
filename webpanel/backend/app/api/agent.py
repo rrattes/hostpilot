@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -16,9 +16,14 @@ router = APIRouter()
 
 
 class AgentStatus(BaseModel):
-    status: str
+    status: Literal["connected", "fallback", "unavailable"]
     mode: str
     allowed_actions: list[str]
+    using_real_agent: bool
+    using_fallback: bool
+    fallback_enabled: bool
+    web_actions_use_real_agent: bool
+    message: str
 
 
 class AgentActionPayload(BaseModel):

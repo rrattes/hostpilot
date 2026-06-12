@@ -46,6 +46,7 @@ import {
   type WebSiteReapplyResult,
   type WebStatus,
 } from "../core/api/web";
+import type { AgentStatus } from "../core/api/agent";
 import { ApiError } from "../core/api/client";
 import { useAuth } from "../core/auth/AuthProvider";
 
@@ -59,12 +60,13 @@ const sectionIcons = {
 const defaultSitesBasePath = "/var/www/hostpilot-sites";
 
 interface WebPageProps {
+  agentStatus: AgentStatus | null;
   canManageSites: boolean;
   canViewSites: boolean;
   moduleState: string;
 }
 
-export function WebPage({ canManageSites, canViewSites, moduleState }: WebPageProps) {
+export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState }: WebPageProps) {
   const { token } = useAuth();
   const [status, setStatus] = useState<WebStatus | null>(null);
   const [sites, setSites] = useState<WebSite[]>([]);
@@ -99,6 +101,11 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
   const [filesSubpath, setFilesSubpath] = useState("");
   const [filesPage, setFilesPage] = useState(1);
   const sections = useMemo(() => status?.sections ?? fallbackSections(), [status]);
+  const realAgentAvailable =
+    agentStatus?.status === "connected" && agentStatus.web_actions_use_real_agent;
+  const agentControlMessage = agentStatus
+    ? agentStatus.message
+    : "Agent status is still loading. Controlled Nginx actions require a connected Agent.";
 
   useEffect(() => {
     if (!token) return;
@@ -287,7 +294,7 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
   }
 
   async function handleApplyNginxConfig() {
-    if (!token || !applyPlan || !canManageSites) return;
+    if (!token || !applyPlan || !canManageSites || !realAgentAvailable) return;
 
     try {
       const result = await applyWebSiteNginxConfig(token, applyPlan.site_id, applyPhrase);
@@ -310,7 +317,7 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
   }
 
   async function handleDisableNginxConfig() {
-    if (!token || !disableTarget || !canManageSites) return;
+    if (!token || !disableTarget || !canManageSites || !realAgentAvailable) return;
 
     try {
       const result = await disableWebSiteNginxConfig(token, disableTarget.id, disablePhrase);
@@ -342,7 +349,7 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
   }
 
   async function handleReapplyNginxConfig() {
-    if (!token || !reapplyTarget || !canManageSites) return;
+    if (!token || !reapplyTarget || !canManageSites || !realAgentAvailable) return;
 
     try {
       const result = await reapplyWebSiteNginxConfig(token, reapplyTarget.id, reapplyPhrase);
@@ -461,6 +468,19 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
           </span>
         </div>
       </div>
+
+      {!realAgentAvailable ? (
+        <div className="web-scope-note">
+          <ShieldAlert size={17} />
+          <div>
+            <strong>Controlled Nginx actions require a connected Agent</strong>
+            <span>
+              {agentControlMessage} Preview, apply plan, dry-run, Files, and Logs remain visible
+              where permitted; real Apply, Disable, and Re-Apply are disabled.
+            </span>
+          </div>
+        </div>
+      ) : null}
 
       <div className="web-status-grid">
         <div className="summary-panel summary-panel-primary">
@@ -677,8 +697,9 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                         </button>
                         <button
                           className="icon-text-button state-disabled"
-                          disabled={!canManageSites || site.status !== "applied"}
+                          disabled={!canManageSites || site.status !== "applied" || !realAgentAvailable}
                           onClick={() => openDisableModal(site)}
+                          title={!realAgentAvailable ? "Requires a connected local Agent" : undefined}
                           type="button"
                         >
                           <Lock size={15} />
@@ -686,8 +707,13 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                         </button>
                         <button
                           className="icon-text-button"
-                          disabled={!canManageSites || !["disabled", "error"].includes(site.status)}
+                          disabled={
+                            !canManageSites ||
+                            !["disabled", "error"].includes(site.status) ||
+                            !realAgentAvailable
+                          }
                           onClick={() => openReapplyModal(site)}
+                          title={!realAgentAvailable ? "Requires a connected local Agent" : undefined}
                           type="button"
                         >
                           <ShieldCheck size={15} />
@@ -789,6 +815,12 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                 HostPilot Nginx config, run nginx -t, and reload Nginx only if validation passes.
               </span>
             </div>
+            {!realAgentAvailable ? (
+              <div className="web-apply-warning">
+                <strong>Agent not connected</strong>
+                <span>{agentControlMessage}</span>
+              </div>
+            ) : null}
             <label className="dry-run-confirmation">
               <span>Apply confirmation phrase</span>
               <input
@@ -799,8 +831,13 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
             </label>
             <button
               className="primary-button compact"
-              disabled={!canManageSites || applyPhrase !== applyPlan.confirmation_phrase}
+              disabled={
+                !canManageSites ||
+                !realAgentAvailable ||
+                applyPhrase !== applyPlan.confirmation_phrase
+              }
               onClick={handleApplyNginxConfig}
+              title={!realAgentAvailable ? "Requires a connected local Agent" : undefined}
               type="button"
             >
               Apply Nginx Config
@@ -841,6 +878,12 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
               <strong>Required confirmation</strong>
               <span>{disableConfirmationPhrase(disableTarget)}</span>
             </div>
+            {!realAgentAvailable ? (
+              <div className="web-apply-warning">
+                <strong>Agent not connected</strong>
+                <span>{agentControlMessage}</span>
+              </div>
+            ) : null}
             <label className="dry-run-confirmation">
               <span>Disable confirmation phrase</span>
               <input
@@ -852,9 +895,12 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
             <button
               className="primary-button compact"
               disabled={
-                !canManageSites || disablePhrase !== disableConfirmationPhrase(disableTarget)
+                !canManageSites ||
+                !realAgentAvailable ||
+                disablePhrase !== disableConfirmationPhrase(disableTarget)
               }
               onClick={handleDisableNginxConfig}
+              title={!realAgentAvailable ? "Requires a connected local Agent" : undefined}
               type="button"
             >
               Disable Site
@@ -893,6 +939,12 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
               <strong>Required confirmation</strong>
               <span>{applyConfirmationPhrase(reapplyTarget)}</span>
             </div>
+            {!realAgentAvailable ? (
+              <div className="web-apply-warning">
+                <strong>Agent not connected</strong>
+                <span>{agentControlMessage}</span>
+              </div>
+            ) : null}
             <label className="dry-run-confirmation">
               <span>Enable/Re-Apply confirmation phrase</span>
               <input
@@ -903,8 +955,13 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
             </label>
             <button
               className="primary-button compact"
-              disabled={!canManageSites || reapplyPhrase !== applyConfirmationPhrase(reapplyTarget)}
+              disabled={
+                !canManageSites ||
+                !realAgentAvailable ||
+                reapplyPhrase !== applyConfirmationPhrase(reapplyTarget)
+              }
               onClick={handleReapplyNginxConfig}
+              title={!realAgentAvailable ? "Requires a connected local Agent" : undefined}
               type="button"
             >
               Enable/Re-Apply Site

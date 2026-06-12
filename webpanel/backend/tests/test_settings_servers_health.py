@@ -122,7 +122,8 @@ def test_core_health_status_endpoint() -> None:
     payload = response.json()
     assert payload["core_status"] == "ok"
     assert payload["database_status"] == "ok"
-    assert payload["agent_mock_status"] == "ok"
+    assert payload["agent_status"] in {"connected", "fallback", "unavailable"}
+    assert isinstance(payload["agent_web_actions_use_real_agent"], bool)
     assert payload["enabled_modules_count"] == 1
     assert payload["locked_modules_count"] == 1
     assert payload["recent_jobs_count"] == 1

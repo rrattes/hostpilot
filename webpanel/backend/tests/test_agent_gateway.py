@@ -103,6 +103,70 @@ def test_operator_can_execute_mock_action() -> None:
     assert response.json()["data"]["status"] == "ok"
 
 
+def test_agent_status_connected_when_local_agent_health_ok(monkeypatch) -> None:
+    def fake_health() -> dict[str, object]:
+        return {
+            "status": "ok",
+            "mode": "local-http",
+            "allowed_actions": ["mock.health", "web.nginx.apply_site_config"],
+        }
+
+    monkeypatch.setattr("app.core.agent_gateway.service.get_local_agent_health", fake_health)
+    token = _token("viewer@example.com", ["agent.view"])
+    client = TestClient(app)
+
+    response = client.get("/api/agent/status", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "connected"
+    assert payload["using_real_agent"] is True
+    assert payload["using_fallback"] is False
+    assert payload["web_actions_use_real_agent"] is True
+    assert payload["mode"] == "local-http"
+
+
+def test_agent_status_fallback_when_local_agent_unavailable_in_dev(monkeypatch) -> None:
+    def offline_health() -> dict[str, object]:
+        raise LocalAgentTransportError("offline")
+
+    monkeypatch.setattr("app.core.agent_gateway.service.get_local_agent_health", offline_health)
+    monkeypatch.setattr("app.core.agent_gateway.service.get_runtime_environment", lambda: "development")
+    token = _token("viewer@example.com", ["agent.view"])
+    client = TestClient(app)
+
+    response = client.get("/api/agent/status", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "fallback"
+    assert payload["using_real_agent"] is False
+    assert payload["using_fallback"] is True
+    assert payload["fallback_enabled"] is True
+    assert payload["web_actions_use_real_agent"] is False
+    assert payload["mode"] == "mock-fallback"
+
+
+def test_agent_status_unavailable_when_local_agent_unavailable_without_fallback(monkeypatch) -> None:
+    def offline_health() -> dict[str, object]:
+        raise LocalAgentTransportError("offline")
+
+    monkeypatch.setattr("app.core.agent_gateway.service.get_local_agent_health", offline_health)
+    monkeypatch.setattr("app.core.agent_gateway.service.get_runtime_environment", lambda: "production")
+    token = _token("viewer@example.com", ["agent.view"])
+    client = TestClient(app)
+
+    response = client.get("/api/agent/status", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "unavailable"
+    assert payload["using_real_agent"] is False
+    assert payload["using_fallback"] is False
+    assert payload["fallback_enabled"] is False
+    assert payload["web_actions_use_real_agent"] is False
+
+
 def test_operator_action_uses_local_agent_transport(monkeypatch) -> None:
     captured_request: AgentActionRequest | None = None
 

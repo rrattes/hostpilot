@@ -59,10 +59,10 @@ export function AgentPage({ canExecuteMock }: AgentPageProps) {
     <section className="data-page" aria-label="Agent">
       <div className="section-heading">
         <div>
-          <span className="eyebrow">Mock gateway</span>
+          <span className="eyebrow">Agent gateway</span>
           <h2>Agent</h2>
         </div>
-        <span className="count-pill">{status?.mode ?? "mock"}</span>
+        <span className="count-pill">{status?.mode ?? "checking"}</span>
       </div>
 
       {error ? <div className="login-error">{error}</div> : null}
@@ -70,13 +70,13 @@ export function AgentPage({ canExecuteMock }: AgentPageProps) {
       <div className="summary-grid">
         <div className="summary-panel">
           <span className="metric-label">Status</span>
-          <strong>{status?.status ?? "Unknown"}</strong>
-          <p>Agent gateway is currently backed by safe mock actions only.</p>
+          <strong>{status ? agentStatusLabel(status.status) : "Unknown"}</strong>
+          <p>{status?.message ?? "Checking whether the local Agent is reachable."}</p>
         </div>
         <div className="summary-panel">
-          <span className="metric-label">Allowed actions</span>
-          <strong>{status?.allowed_actions.length ?? 0}</strong>
-          <p>No shell, package manager, service, or infrastructure actions are available.</p>
+          <span className="metric-label">Web controlled actions</span>
+          <strong>{status?.web_actions_use_real_agent ? "Real Agent" : "Not real Agent"}</strong>
+          <p>{status?.using_fallback ? "Windows/dev fallback is active and clearly labeled." : "No arbitrary commands are exposed."}</p>
         </div>
       </div>
 
@@ -85,7 +85,7 @@ export function AgentPage({ canExecuteMock }: AgentPageProps) {
           <article className="module-card disabled" key={action}>
             <div className="module-card-header">
               <h3>{action}</h3>
-              <span className="state-pill">Mock</span>
+              <span className="state-pill">{status.using_real_agent ? "Agent" : "Fallback"}</span>
             </div>
             <p>Allowlisted mock action exposed by the development agent contract.</p>
             {canExecuteMock ? (
@@ -120,6 +120,12 @@ export function AgentPage({ canExecuteMock }: AgentPageProps) {
       </div>
     </section>
   );
+}
+
+function agentStatusLabel(status: AgentStatus["status"]) {
+  if (status === "connected") return "Connected";
+  if (status === "fallback") return "Fallback (dev)";
+  return "Unavailable";
 }
 
 function formatDate(value: string) {

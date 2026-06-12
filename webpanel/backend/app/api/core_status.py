@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
+from app.core.agent_gateway.service import get_agent_status
 from app.core.rbac.permissions import require_permission
 from app.db.models import AuditEvent, Job, Module, Server
 from app.db.session import get_db
@@ -34,10 +35,11 @@ class CoreStatus(BaseModel):
     core_version: str
     core_status: Literal["ok"]
     database_status: Literal["ok", "error"]
-    agent_mock_status: Literal["ok"]
+    agent_status: Literal["connected", "fallback", "unavailable"]
     runtime: str
     database: str
-    agent_mode: Literal["mock"]
+    agent_mode: str
+    agent_web_actions_use_real_agent: bool
     local_server: LocalServerStatus | None
     enabled_modules_count: int
     locked_modules_count: int
@@ -62,16 +64,18 @@ def get_core_status(db: Session = Depends(get_db)) -> CoreStatus:
     recent_since = datetime.now(UTC) - timedelta(hours=24)
     local_server = db.scalar(select(Server).where(Server.slug == "local"))
     modules = db.scalars(select(Module).order_by(Module.name)).all()
+    agent_status = get_agent_status()
 
     return CoreStatus(
         product="HostPilot Core",
         core_version="0.1.0",
         core_status="ok",
         database_status=database_status,
-        agent_mock_status="ok",
+        agent_status=str(agent_status["status"]),  # type: ignore[arg-type]
         runtime="FastAPI",
         database="SQLite",
-        agent_mode="mock",
+        agent_mode=str(agent_status["mode"]),
+        agent_web_actions_use_real_agent=bool(agent_status["web_actions_use_real_agent"]),
         local_server=_local_server_status(local_server) if local_server is not None else None,
         enabled_modules_count=db.scalar(select(func.count()).where(Module.state == "enabled")) or 0,
         locked_modules_count=db.scalar(select(func.count()).where(Module.state == "locked")) or 0,

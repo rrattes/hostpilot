@@ -22,26 +22,45 @@ logger = logging.getLogger(__name__)
 
 
 def get_agent_status() -> dict[str, object]:
+    fallback_enabled = _dev_agent_fallback_enabled()
     try:
         health = get_local_agent_health()
+        local_status = str(health.get("status", "ok"))
+        is_connected = local_status == "ok"
+        status = "connected" if is_connected else "unavailable"
         return {
-            "status": str(health.get("status", "ok")),
+            "status": status,
             "mode": str(health.get("mode", "local-http")),
             "allowed_actions": list(health.get("allowed_actions", allowed_mock_actions())),
+            "using_real_agent": is_connected,
+            "using_fallback": False,
+            "fallback_enabled": fallback_enabled,
+            "web_actions_use_real_agent": is_connected,
+            "message": "Local Agent is connected." if is_connected else "Local Agent responded unhealthy.",
         }
     except LocalAgentTransportError as exc:
-        if _dev_agent_fallback_enabled():
+        if fallback_enabled:
             logger.warning("Local agent unavailable; using dev mock fallback: %s", exc)
             return {
-                "status": "ok",
+                "status": "fallback",
                 "mode": "mock-fallback",
                 "allowed_actions": allowed_mock_actions(),
+                "using_real_agent": False,
+                "using_fallback": True,
+                "fallback_enabled": True,
+                "web_actions_use_real_agent": False,
+                "message": "Local Agent is unavailable; Windows/dev mock fallback is active.",
             }
         logger.error("Local agent unavailable and fallback disabled: %s", exc)
         return {
             "status": "unavailable",
             "mode": "local-http",
             "allowed_actions": allowed_mock_actions(),
+            "using_real_agent": False,
+            "using_fallback": False,
+            "fallback_enabled": False,
+            "web_actions_use_real_agent": False,
+            "message": "Local Agent is unavailable and fallback is disabled.",
         }
 
 

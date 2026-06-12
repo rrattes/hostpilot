@@ -219,6 +219,7 @@ function renderProtectedPage(
 
     return canOpenWeb ? (
       <WebPage
+        agentStatus={agentStatus}
         canManageSites={hasPermission("web.sites.manage")}
         canViewSites={hasPermission("web.sites.view")}
         moduleState={webModule.state}

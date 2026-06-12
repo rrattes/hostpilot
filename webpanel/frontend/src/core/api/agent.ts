@@ -1,9 +1,16 @@
 import { apiRequest } from "./client";
 
+export type AgentAvailability = "connected" | "fallback" | "unavailable";
+
 export interface AgentStatus {
-  status: string;
+  status: AgentAvailability;
   mode: string;
   allowed_actions: string[];
+  using_real_agent: boolean;
+  using_fallback: boolean;
+  fallback_enabled: boolean;
+  web_actions_use_real_agent: boolean;
+  message: string;
 }
 
 export interface AgentActionResult {

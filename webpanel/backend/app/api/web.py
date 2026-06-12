@@ -416,7 +416,7 @@ def get_web_site_files(
         max_depth=int(response.data.get("max_depth", 1)),
         total_entries=int(response.data.get("total_entries", 0)),
         has_next=bool(response.data.get("has_next", False)),
-        status=response.status,
+        status=str(response.data.get("status", response.status)),
         job_id=job.id,
         entries=_file_entries_read(response.data.get("entries", [])),
     )

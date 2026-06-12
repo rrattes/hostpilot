@@ -1444,7 +1444,7 @@ def test_web_site_files_preserves_missing_directory_state(monkeypatch) -> None:
             type="agent_action",
             module="agent",
             action=action,
-            status="missing_directory",
+            status="completed",
             payload="{}",
             result="{}",
         )
@@ -1452,8 +1452,9 @@ def test_web_site_files_preserves_missing_directory_state(monkeypatch) -> None:
         db.flush()
         return job, AgentActionResponse(
             success=True,
-            status="missing_directory",
+            status="completed",
             data={
+                "status": "missing_directory",
                 "root_path": "/var/www/hostpilot-sites/files-missing.example.com",
                 "relative_subpath": "missing",
                 "target_path": "/var/www/hostpilot-sites/files-missing.example.com/missing",

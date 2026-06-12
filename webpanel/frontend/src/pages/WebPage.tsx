@@ -94,6 +94,7 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
   const [logsLoading, setLogsLoading] = useState(false);
   const [filesTarget, setFilesTarget] = useState<WebSite | null>(null);
   const [filesResult, setFilesResult] = useState<WebSiteFiles | null>(null);
+  const [filesError, setFilesError] = useState<string | null>(null);
   const [filesLoading, setFilesLoading] = useState(false);
   const [filesSubpath, setFilesSubpath] = useState("");
   const [filesPage, setFilesPage] = useState(1);
@@ -129,6 +130,16 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
   useEffect(() => {
     void loadSites();
   }, [canViewSites, token]);
+
+  useEffect(() => {
+    if (!filesTarget) return;
+
+    setFilesResult(null);
+    setFilesError(null);
+    setFilesSubpath("");
+    setFilesPage(1);
+    void refreshFiles(filesTarget, "", 1);
+  }, [filesTarget?.id, token, canViewSites]);
 
   async function loadReadiness(siteRecords: WebSite[]) {
     if (!token || !canViewSites || siteRecords.length === 0) {
@@ -388,9 +399,6 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
 
   async function handleViewFiles(site: WebSite) {
     setFilesTarget(site);
-    setFilesSubpath("");
-    setFilesPage(1);
-    await refreshFiles(site, "", 1);
   }
 
   async function refreshFiles(site = filesTarget, subpath = filesSubpath, page = filesPage) {
@@ -402,9 +410,10 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
       setFilesResult(result);
       setFilesSubpath(result.relative_subpath);
       setFilesPage(result.page);
+      setFilesError(null);
       setSiteError(null);
     } catch (filesError) {
-      setSiteError(
+      setFilesError(
         filesError instanceof ApiError
           ? filesError.message
           : "Unable to load Web site files.",
@@ -993,6 +1002,15 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
               <button
                 className="icon-text-button"
                 disabled={filesLoading}
+                onClick={() => navigateFiles("", 1)}
+                type="button"
+              >
+                <FolderOpen size={15} />
+                Root
+              </button>
+              <button
+                className="icon-text-button"
+                disabled={filesLoading}
                 onClick={() => refreshFiles()}
                 type="button"
               >
@@ -1000,13 +1018,15 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                 Refresh
               </button>
             </div>
+            {filesError ? <div className="login-error">{filesError}</div> : null}
             {filesLoading ? <span className="empty-table-note">Loading files.</span> : null}
             {filesResult ? (
               <FileBrowserTable
                 entries={filesResult.entries}
+                status={filesResult.status}
                 onOpenDirectory={(entry) => navigateFiles(entry.relative_path)}
               />
-            ) : !filesLoading ? (
+            ) : !filesLoading && !filesError ? (
               <span className="empty-table-note">No file listing loaded.</span>
             ) : null}
             {filesResult ? (
@@ -1044,6 +1064,7 @@ export function WebPage({ canManageSites, canViewSites, moduleState }: WebPagePr
                 onClick={() => {
                   setFilesTarget(null);
                   setFilesResult(null);
+                  setFilesError(null);
                   setFilesSubpath("");
                   setFilesPage(1);
                 }}
@@ -1173,13 +1194,19 @@ function FileBreadcrumb({
 
 function FileBrowserTable({
   entries,
+  status,
   onOpenDirectory,
 }: {
   entries: WebSiteFileEntry[];
+  status: string;
   onOpenDirectory: (entry: WebSiteFileEntry) => void;
 }) {
   if (entries.length === 0) {
-    return <span className="empty-table-note">Directory is empty or missing.</span>;
+    const message =
+      status === "missing_directory"
+        ? "Site root directory does not exist yet. Apply/provision the site first."
+        : "Directory is empty.";
+    return <span className="empty-table-note">{message}</span>;
   }
 
   return (

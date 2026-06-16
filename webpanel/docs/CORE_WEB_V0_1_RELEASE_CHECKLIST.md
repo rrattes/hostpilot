@@ -65,23 +65,23 @@ Overall result: **Pass for controlled v0.1 lab/admin release, with Ubuntu lab re
 | Check | Result | Notes |
 | --- | --- | --- |
 | SSH port reachability | Pass | `192.168.0.64:22` is reachable. |
-| SSH password authentication | Blocked | Supplied password was rejected for both `rattes` and `root`. |
-| SSH key installation | Blocked | Requires successful password login first. |
-| SSH alias validation | Blocked | `hostpilot-lab` points to `rattes@192.168.0.64` with `~/.ssh/hostpilot_lab`, but passwordless login cannot pass until the public key is installed. |
-| OS/version | Not run | Blocked by SSH authentication. |
-| Sudo/root access | Not run | Blocked by SSH authentication. |
-| Deploy latest main | Not run | Blocked by SSH authentication. |
-| Run migrations | Not run | Blocked by SSH authentication. |
-| Restart Core/Agent/Nginx | Not run | Blocked by SSH authentication. |
-| Core health on lab | Not run | Blocked by SSH authentication. |
-| Agent health on lab | Not run | Blocked by SSH authentication. |
-| UI HTTP 200 on lab | Not run | Blocked by SSH authentication. |
-| Login on lab | Not run | Blocked by SSH authentication. |
-| Web create/list on lab | Not run | Blocked by SSH authentication. |
-| Files/Logs on lab | Not run | Blocked by SSH authentication. |
-| Preview/plan/dry-run/preflight on lab | Not run | Blocked by SSH authentication. |
-| Controlled apply/disable/reapply on lab | Not run | Blocked by SSH authentication. |
-| Audit/job records on lab | Not run | Blocked by SSH authentication. |
+| SSH password authentication | Pass | `rattes` accepted the provided disposable-lab password. |
+| SSH key installation | Pass | Existing local key `~/.ssh/hostpilot_lab.pub` was installed for `rattes`. |
+| SSH alias validation | Pass | `ssh hostpilot-lab` logs in passwordlessly as `rattes`. |
+| OS/version | Pass | Ubuntu 26.04 LTS. |
+| Sudo/root access | Pass | `rattes` has sudo access; sudo requires an interactive password prompt. |
+| Deploy latest main | Not run | SSH setup only; deployment is a later validation task. |
+| Run migrations | Not run | SSH setup only; deployment is a later validation task. |
+| Restart Core/Agent/Nginx | Not run | SSH setup only; deployment is a later validation task. |
+| Core health on lab | Not run | HostPilot not validated on this new lab yet. |
+| Agent health on lab | Not run | HostPilot not validated on this new lab yet. |
+| UI HTTP 200 on lab | Not run | `http://192.168.0.64:8080` is not serving HostPilot yet. |
+| Login on lab | Not run | HostPilot not validated on this new lab yet. |
+| Web create/list on lab | Not run | HostPilot not validated on this new lab yet. |
+| Files/Logs on lab | Not run | HostPilot not validated on this new lab yet. |
+| Preview/plan/dry-run/preflight on lab | Not run | HostPilot not validated on this new lab yet. |
+| Controlled apply/disable/reapply on lab | Not run | HostPilot not validated on this new lab yet. |
+| Audit/job records on lab | Not run | HostPilot not validated on this new lab yet. |
 
 Previous controlled Nginx apply validation on the Ubuntu lab is documented in `docs/deploy/ubuntu-lab-deploy.md`.
 

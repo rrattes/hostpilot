@@ -39,8 +39,11 @@ Remaining limitations are known and intentionally scoped out of v0.1. The most i
   - row Actions menu contained Files, Logs, Preview, Mark Ready, Plan / Dry-run / Apply, Disable record, Disable site, and Re-Apply;
   - controlled Agent actions were disabled while Agent state was fallback.
 - Ubuntu lab validation:
-  - not rerun on 2026-06-16 because the new lab at `192.168.0.64` accepts TCP connections on port `22`, but password authentication failed for both `rattes` and `root`;
-  - SSH key installation, OS detection, and sudo validation remain pending until valid credentials are available;
+  - SSH setup was completed on 2026-06-16 for `rattes@192.168.0.64`;
+  - passwordless SSH through alias `hostpilot-lab` works with `~/.ssh/hostpilot_lab`;
+  - OS is Ubuntu 26.04 LTS;
+  - sudo access exists for `rattes`, with password prompt required;
+  - HostPilot deployment validation still needs to be rerun on this new disposable lab;
   - Previous controlled Nginx apply validation remains documented in `docs/deploy/ubuntu-lab-deploy.md`.
 
 ## Readiness Matrix

@@ -376,17 +376,16 @@ Result:
   workstation.
 - Existing local key `~/.ssh/hostpilot_lab` was selected for HostPilot lab
   access.
-- Password authentication was attempted for `rattes` first and then `root`.
-- The supplied password was rejected for both users, so the public key could not
-  be installed.
+- Password authentication succeeded for `rattes`.
+- The existing public key `~/.ssh/hostpilot_lab.pub` was installed for `rattes`.
 - Local SSH alias `hostpilot-lab` was updated to point at
-  `rattes@192.168.0.64` with `~/.ssh/hostpilot_lab`, pending successful key
-  installation.
-- Passwordless SSH, OS/version detection, and sudo/root validation remain
-  blocked until a working password or preinstalled key is available.
+  `rattes@192.168.0.64` with `~/.ssh/hostpilot_lab`.
+- Passwordless SSH validation passed with `ssh hostpilot-lab`.
+- OS/version validation returned Ubuntu 26.04 LTS.
+- Sudo access exists for `rattes`; sudo prompts for the account password.
 
 The latest v0.1 Ubuntu lab deployment and controlled Web flow were not rerun
-because SSH authentication did not succeed. The last completed controlled Nginx
+because this task covered SSH setup only. The last completed controlled Nginx
 apply validation remains the 2026-06-11 validation above.
 
 Next lab validation should rerun:

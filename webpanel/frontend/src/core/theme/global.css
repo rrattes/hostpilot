@@ -1154,6 +1154,13 @@ textarea {
   margin-bottom: 12px;
 }
 
+.section-subtitle {
+  color: #8f9dad;
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 5px 0 0;
+}
+
 .module-grid {
   display: grid;
   gap: 10px;
@@ -1549,7 +1556,7 @@ textarea {
 .web-status-grid {
   display: grid;
   gap: 10px;
-  grid-template-columns: 1.2fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .web-section-grid {
@@ -1602,6 +1609,10 @@ textarea {
 .web-sites-registry {
   display: grid;
   gap: 12px;
+}
+
+.web-sites-registry .data-table-wrap {
+  overflow: visible;
 }
 
 .web-site-form {
@@ -1657,6 +1668,24 @@ textarea {
   display: block;
 }
 
+.web-sites-table {
+  table-layout: fixed;
+}
+
+.web-sites-table th:nth-child(1) {
+  width: 28%;
+}
+
+.web-sites-table th:nth-child(2),
+.web-sites-table th:nth-child(3),
+.web-sites-table th:nth-child(4) {
+  width: 17%;
+}
+
+.web-sites-table th:nth-child(5) {
+  width: 21%;
+}
+
 .web-sites-table td strong {
   color: #eef4f8;
   font-size: 13px;
@@ -1682,10 +1711,10 @@ textarea {
   border: 1px solid #445568;
   border-radius: 999px;
   color: #c7d0dc !important;
-  display: inline-block !important;
+  display: inline-flex !important;
   font-size: 11px !important;
   font-weight: 800;
-  margin-top: 6px;
+  margin-top: 0;
   padding: 4px 8px;
 }
 
@@ -1746,6 +1775,154 @@ textarea {
 .web-files-action {
   border-color: #2e7d68;
   color: #b9f3df;
+}
+
+.web-site-title-cell {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.web-row-expand {
+  align-items: center;
+  background: #101923;
+  border: 1px solid #263546;
+  border-radius: 7px;
+  color: #9fb0c1;
+  display: inline-flex;
+  height: 30px;
+  justify-content: center;
+  width: 30px;
+}
+
+.web-row-expand svg {
+  transition: transform 140ms ease;
+}
+
+.web-row-expand.expanded svg {
+  transform: rotate(180deg);
+}
+
+.web-compact-stack {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.web-compact-stack > span:last-child:not(.state-pill):not(.workflow-badge) {
+  color: #7f90a6;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.web-site-details-row td {
+  background: rgba(8, 13, 19, 0.48);
+  border-top: 0;
+  padding: 0;
+}
+
+.web-site-details {
+  border-top: 1px solid rgba(38, 53, 70, 0.72);
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.web-detail-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(220px, 1.5fr) repeat(3, minmax(130px, 1fr));
+}
+
+.web-detail-grid > div,
+.web-detail-readiness {
+  background: rgba(16, 25, 35, 0.58);
+  border: 1px solid rgba(38, 53, 70, 0.78);
+  border-radius: 8px;
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.web-detail-grid span,
+.web-detail-readiness strong {
+  color: #8f9dad;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.web-actions-menu {
+  position: relative;
+}
+
+.web-actions-menu summary {
+  align-items: center;
+  background: #101923;
+  border: 1px solid #263546;
+  border-radius: 7px;
+  color: #d8dee9;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 7px;
+  justify-content: center;
+  list-style: none;
+  min-height: 34px;
+  padding: 0 10px;
+  width: 100%;
+}
+
+.web-actions-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.web-actions-panel {
+  background:
+    linear-gradient(180deg, rgba(18, 28, 39, 0.98), rgba(10, 17, 24, 0.99)),
+    #0b1219;
+  border: 1px solid #263546;
+  border-radius: 8px;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.32);
+  display: grid;
+  gap: 10px;
+  min-width: 236px;
+  padding: 10px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+}
+
+.web-actions-group {
+  border-bottom: 1px solid rgba(38, 53, 70, 0.72);
+  display: grid;
+  gap: 7px;
+  padding-bottom: 10px;
+}
+
+.web-actions-group:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.web-actions-group > span {
+  color: #7f90a6;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.web-actions-group .icon-text-button {
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.web-actions-danger {
+  border-top: 1px solid rgba(124, 44, 59, 0.42);
+  padding-top: 10px;
 }
 
 .nginx-preview-modal {
@@ -2434,6 +2611,10 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .web-detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .summary-panel-primary {
     grid-column: auto;
   }
@@ -2495,6 +2676,10 @@ textarea {
 
   .web-site-form {
     align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .web-detail-grid {
     grid-template-columns: 1fr;
   }
 }

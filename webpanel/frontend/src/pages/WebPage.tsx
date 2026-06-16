@@ -1,5 +1,5 @@
 import {
-  Braces,
+  ChevronDown,
   File,
   FileCode2,
   FileText,
@@ -12,8 +12,9 @@ import {
   ServerCog,
   ShieldAlert,
   ShieldCheck,
+  MoreHorizontal,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 
 import {
   applyWebSiteNginxConfig,
@@ -52,13 +53,6 @@ import type { AgentStatus } from "../core/api/agent";
 import { apiErrorMessage } from "../core/api/client";
 import { useAuth } from "../core/auth/AuthProvider";
 
-const sectionIcons = {
-  sites: Globe2,
-  nginx: ServerCog,
-  ssl: ShieldCheck,
-  logs: ScrollText,
-  "php-runtime": Braces,
-};
 const defaultSitesBasePath = "/var/www/hostpilot-sites";
 
 interface WebPageProps {
@@ -103,7 +97,12 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
   const [filesLoading, setFilesLoading] = useState(false);
   const [filesSubpath, setFilesSubpath] = useState("");
   const [filesPage, setFilesPage] = useState(1);
+  const [expandedSiteId, setExpandedSiteId] = useState<number | null>(null);
   const sections = useMemo(() => status?.sections ?? fallbackSections(), [status]);
+  const sectionBySlug = useMemo(
+    () => Object.fromEntries(sections.map((section) => [section.slug, section])),
+    [sections],
+  );
   const realAgentAvailable =
     agentStatus?.status === "connected" && agentStatus.web_actions_use_real_agent;
   const agentControlMessage = agentStatus
@@ -421,50 +420,32 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
     void refreshFiles(filesTarget, subpath, page);
   }
 
+  const appliedSites = sites.filter((site) => site.status === "applied").length;
+  const readySites = sites.filter((site) => site.provisioning_status === "ready_to_apply").length;
+  const blockedReadiness = sites.filter((site) => readinessBySiteId[site.id]?.ready === false).length;
+  const logsAvailable = sectionBySlug.logs?.status === "available";
+
   return (
     <section className="data-page web-page" aria-label="Web module">
       <div className="section-heading">
         <div>
           <span className="eyebrow">Web module</span>
           <h2>Web</h2>
+          <p className="section-subtitle">Site records, read-only Files/Logs, and controlled Nginx workflows.</p>
         </div>
         <div className="page-actions">
           <span className="count-pill">
             <ShieldCheck size={14} />
-            Site workflows active
+            {status?.module_state ?? moduleState}
           </span>
           <span className="count-pill">
             <ShieldAlert size={14} />
-            {status?.module_state ?? moduleState}
+            {realAgentAvailable ? "Agent connected" : "Agent not connected"}
           </span>
         </div>
       </div>
 
       {error ? <div className="login-error">{error}</div> : null}
-
-      <div className="web-scope-note">
-        <FileText size={17} />
-        <div>
-          <strong>Web site workflows</strong>
-          <span>
-            This page manages Web site records, read-only Files and Logs, and controlled Nginx
-            workflows. SSL, PHP management, deploy changes, and arbitrary Agent actions remain disabled.
-          </span>
-        </div>
-      </div>
-
-      {!realAgentAvailable ? (
-        <div className="web-scope-note">
-          <ShieldAlert size={17} />
-          <div>
-            <strong>Controlled Nginx actions require a connected Agent</strong>
-            <span>
-              {agentControlMessage} Preview, apply plan, dry-run, Files, and Logs remain visible
-              where permitted; real Apply, Disable, and Re-Apply are disabled.
-            </span>
-          </div>
-        </div>
-      ) : null}
 
       <div className="web-status-grid">
         <div className="summary-panel summary-panel-primary">
@@ -472,38 +453,42 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
             <span className="summary-icon">
               <Globe2 size={17} />
             </span>
-            <span className="metric-label">Module state</span>
+            <span className="metric-label">Sites</span>
           </div>
-          <strong>{status?.module_state ?? moduleState}</strong>
-          <p>Sites, file browsing, log tails, and controlled Nginx workflows are exposed here.</p>
+          <strong>{sites.length}</strong>
+          <p>{appliedSites} applied, {readySites} ready to apply.</p>
         </div>
         <div className="summary-panel">
           <div className="summary-panel-header">
             <span className="summary-icon">
-              <Lock size={17} />
+              <ServerCog size={17} />
             </span>
-            <span className="metric-label">Operational</span>
+            <span className="metric-label">Nginx</span>
           </div>
-          <strong>{status?.operational ? "Active" : "No"}</strong>
-          <p>Use a site row to open Files, Logs, Preview, Plan, Dry-run, Apply, Disable, or Re-Apply.</p>
+          <strong>{realAgentAvailable ? "Ready" : "Blocked"}</strong>
+          <p>{realAgentAvailable ? "Controlled Apply/Disable/Re-Apply available." : agentControlMessage}</p>
         </div>
-      </div>
-
-      <div className="web-section-grid">
-        {sections.map((section) => (
-          <WebSectionCard key={section.slug} section={section} />
-        ))}
+        <div className="summary-panel">
+          <div className="summary-panel-header">
+            <span className="summary-icon">
+              <FolderOpen size={17} />
+            </span>
+            <span className="metric-label">Logs/Files</span>
+          </div>
+          <strong>{logsAvailable ? "Read-only" : "Limited"}</strong>
+          <p>{blockedReadiness} site readiness checks need attention. SSL/PHP remain low-priority flags.</p>
+        </div>
       </div>
 
       <section className="web-sites-registry" aria-label="Web sites registry">
         <div className="dashboard-section-heading compact">
           <div>
-            <span className="eyebrow">Records only</span>
+            <span className="eyebrow">Primary workflow</span>
             <h2>Sites</h2>
           </div>
           <span className="section-chip">
             <Lock size={14} />
-            Not provisioned yet
+            Records and controlled actions
           </span>
         </div>
 
@@ -559,8 +544,8 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
               </button>
             </div>
             <div className="web-validation-note">
-              New records must use a valid domain and a safe absolute root path under{" "}
-              <code>{defaultSitesBasePath}</code>. Validation only affects registry records.
+              Use a valid domain and a safe absolute root path under <code>{defaultSitesBasePath}</code>.
+              SSL/PHP are recorded as metadata only.
             </div>
           </>
         ) : (
@@ -580,19 +565,17 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
             <table className="data-table web-sites-table">
               <thead>
                 <tr>
-                  <th>Domain</th>
+                  <th>Site</th>
                   <th>Status</th>
-                  <th>Root path</th>
-                  <th>Runtime</th>
-                  <th>SSL</th>
                   <th>Readiness</th>
+                  <th>Agent</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {sites.length === 0 ? (
                   <tr>
-                    <td colSpan={7}>
+                    <td colSpan={5}>
                       <span className="empty-table-note">
                         Create a site record to access Files, Logs, and Nginx actions.
                       </span>
@@ -600,112 +583,61 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
                   </tr>
                 ) : (
                   sites.map((site) => (
-                  <tr key={site.id}>
-                    <td>
-                      <strong>{site.domain}</strong>
-                      <span>{siteSummaryLabel(site)}</span>
-                      <span className={`workflow-badge ${site.provisioning_status}`}>
-                        {workflowLabel(site.provisioning_status)}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`state-pill web-site-status ${site.status}`}>
-                        <Lock size={14} />
-                        {site.status === "config_pending" ? "Config pending" : site.status}
-                      </span>
-                    </td>
-                    <td>
-                      <code className="path-code">{site.root_path}</code>
-                    </td>
-                    <td>{site.php_runtime}</td>
-                    <td>{site.ssl_enabled ? "Flagged" : "Off"}</td>
-                    <td>
-                      <ReadinessChecklist readiness={readinessBySiteId[site.id]} />
-                    </td>
-                    <td>
-                      <div className="web-site-actions">
-                        <button
-                          className="icon-text-button web-files-action"
-                          disabled={!canViewSites}
-                          onClick={() => handleViewFiles(site)}
-                          title="Open read-only file browser for this site"
-                          type="button"
-                        >
-                          <FolderOpen size={15} />
-                          Browse Files
-                        </button>
-                        <button
-                          className="icon-text-button"
-                          disabled={!canViewSites}
-                          onClick={() => handlePreviewNginxConfig(site.id)}
-                          type="button"
-                        >
-                          <FileCode2 size={15} />
-                          Preview Nginx Config
-                        </button>
-                        <button
-                          className="icon-text-button"
-                          disabled={!canManageSites || !readinessBySiteId[site.id]?.ready}
-                          onClick={() => handleMarkReady(site.id)}
-                          type="button"
-                        >
-                          <ShieldCheck size={15} />
-                          Mark Ready
-                        </button>
-                        <button
-                          className="icon-text-button"
-                          disabled={!canViewSites || site.provisioning_status !== "ready_to_apply"}
-                          onClick={() => handleViewApplyPlan(site.id)}
-                          type="button"
-                        >
-                          <FileText size={15} />
-                          Apply Plan / Dry-run
-                        </button>
-                        <button
-                          className="icon-text-button"
-                          disabled={!canViewSites}
-                          onClick={() => handleViewLogs(site)}
-                          type="button"
-                        >
-                          <ScrollText size={15} />
-                          Logs
-                        </button>
-                        <button
-                          className="icon-text-button state-disabled"
-                          disabled={!canManageSites || site.status === "disabled"}
-                          onClick={() => handleDisableSite(site.id)}
-                          type="button"
-                        >
-                          <Lock size={15} />
-                          Disable record
-                        </button>
-                        <button
-                          className="icon-text-button state-disabled"
-                          disabled={!canManageSites || site.status !== "applied" || !realAgentAvailable}
-                          onClick={() => openDisableModal(site)}
-                          title={!realAgentAvailable ? "Requires a connected local Agent" : undefined}
-                          type="button"
-                        >
-                          <Lock size={15} />
-                          Disable Site
-                        </button>
-                        <button
-                          className="icon-text-button"
-                          disabled={
-                            !canManageSites ||
-                            !["disabled", "error"].includes(site.status) ||
-                            !realAgentAvailable
-                          }
-                          onClick={() => openReapplyModal(site)}
-                          title={!realAgentAvailable ? "Requires a connected local Agent" : undefined}
-                          type="button"
-                        >
-                          <ShieldCheck size={15} />
-                          Enable/Re-Apply
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                    <Fragment key={site.id}>
+                      <tr key={site.id}>
+                        <td>
+                          <div className="web-site-title-cell">
+                            <button
+                              className={`web-row-expand ${expandedSiteId === site.id ? "expanded" : ""}`}
+                              onClick={() =>
+                                setExpandedSiteId((current) => (current === site.id ? null : site.id))
+                              }
+                              type="button"
+                              aria-label={`Toggle details for ${site.domain}`}
+                            >
+                              <ChevronDown size={15} />
+                            </button>
+                            <div>
+                              <strong>{site.domain}</strong>
+                              <span>{siteSummaryLabel(site)}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td>
+                          <SiteStatusSummary site={site} />
+                        </td>
+                        <td>
+                          <ReadinessSummary readiness={readinessBySiteId[site.id]} />
+                        </td>
+                        <td>
+                          <AgentStateChip agentStatus={agentStatus} realAgentAvailable={realAgentAvailable} />
+                        </td>
+                        <td>
+                          <SiteActionsMenu
+                            canManageSites={canManageSites}
+                            canViewSites={canViewSites}
+                            realAgentAvailable={realAgentAvailable}
+                            readiness={readinessBySiteId[site.id]}
+                            site={site}
+                            onDisableRecord={handleDisableSite}
+                            onDisableSite={openDisableModal}
+                            onFiles={handleViewFiles}
+                            onLogs={handleViewLogs}
+                            onMarkReady={handleMarkReady}
+                            onPlan={handleViewApplyPlan}
+                            onPreview={handlePreviewNginxConfig}
+                            onReapply={openReapplyModal}
+                          />
+                        </td>
+                      </tr>
+                      {expandedSiteId === site.id ? (
+                        <tr className="web-site-details-row" key={`${site.id}-details`}>
+                          <td colSpan={5}>
+                            <SiteDetails site={site} readiness={readinessBySiteId[site.id]} />
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
                   ))
                 )}
               </tbody>
@@ -1333,6 +1265,195 @@ function ReadinessChecklist({ readiness }: { readiness?: WebSiteReadiness }) {
   );
 }
 
+function ReadinessSummary({ readiness }: { readiness?: WebSiteReadiness }) {
+  if (!readiness) {
+    return <span className="state-pill">Loading</span>;
+  }
+
+  const passed = readiness.checks.filter((check) => check.passed).length;
+  const total = readiness.checks.length;
+  return (
+    <div className="web-compact-stack">
+      <span className={`state-pill ${readiness.ready ? "state-active" : "state-disabled"}`}>
+        {readiness.ready ? "Ready" : "Needs work"}
+      </span>
+      <span>{passed}/{total} checks</span>
+    </div>
+  );
+}
+
+function SiteStatusSummary({ site }: { site: WebSite }) {
+  return (
+    <div className="web-compact-stack">
+      <span className={`state-pill web-site-status ${site.status}`}>
+        {site.status === "config_pending" ? "Config pending" : site.status}
+      </span>
+      <span className={`workflow-badge ${site.provisioning_status}`}>
+        {workflowLabel(site.provisioning_status)}
+      </span>
+    </div>
+  );
+}
+
+function AgentStateChip({
+  agentStatus,
+  realAgentAvailable,
+}: {
+  agentStatus: AgentStatus | null;
+  realAgentAvailable: boolean;
+}) {
+  if (!agentStatus) {
+    return <span className="state-pill">Checking</span>;
+  }
+
+  return (
+    <div className="web-compact-stack">
+      <span className={`state-pill ${realAgentAvailable ? "state-active" : "state-disabled"}`}>
+        {agentStatus.status}
+      </span>
+      <span>{realAgentAvailable ? "Real Agent" : "controlled actions blocked"}</span>
+    </div>
+  );
+}
+
+function SiteDetails({ site, readiness }: { site: WebSite; readiness?: WebSiteReadiness }) {
+  return (
+    <div className="web-site-details">
+      <div className="web-detail-grid">
+        <div>
+          <span>Root path</span>
+          <code className="path-code">{site.root_path}</code>
+        </div>
+        <div>
+          <span>PHP runtime</span>
+          <code className="path-code">{site.php_runtime || "none"}</code>
+        </div>
+        <div>
+          <span>SSL</span>
+          <code className="path-code">{site.ssl_enabled ? "flagged only" : "off"}</code>
+        </div>
+        <div>
+          <span>Updated</span>
+          <code className="path-code">{formatModifiedTime(Date.parse(site.updated_at) / 1000)}</code>
+        </div>
+      </div>
+      <div className="web-detail-readiness">
+        <strong>Readiness checks</strong>
+        <ReadinessChecklist readiness={readiness} />
+      </div>
+    </div>
+  );
+}
+
+function SiteActionsMenu({
+  canManageSites,
+  canViewSites,
+  realAgentAvailable,
+  readiness,
+  site,
+  onDisableRecord,
+  onDisableSite,
+  onFiles,
+  onLogs,
+  onMarkReady,
+  onPlan,
+  onPreview,
+  onReapply,
+}: {
+  canManageSites: boolean;
+  canViewSites: boolean;
+  realAgentAvailable: boolean;
+  readiness?: WebSiteReadiness;
+  site: WebSite;
+  onDisableRecord: (siteId: number) => void;
+  onDisableSite: (site: WebSite) => void;
+  onFiles: (site: WebSite) => void;
+  onLogs: (site: WebSite) => void;
+  onMarkReady: (siteId: number) => void;
+  onPlan: (siteId: number) => void;
+  onPreview: (siteId: number) => void;
+  onReapply: (site: WebSite) => void;
+}) {
+  return (
+    <details className="web-actions-menu">
+      <summary>
+        <MoreHorizontal size={16} />
+        Actions
+      </summary>
+      <div className="web-actions-panel">
+        <div className="web-actions-group">
+          <span>Files / Logs</span>
+          <button className="icon-text-button web-files-action" disabled={!canViewSites} onClick={() => onFiles(site)} type="button">
+            <FolderOpen size={15} />
+            Files
+          </button>
+          <button className="icon-text-button" disabled={!canViewSites} onClick={() => onLogs(site)} type="button">
+            <ScrollText size={15} />
+            Logs
+          </button>
+        </div>
+        <div className="web-actions-group">
+          <span>Nginx</span>
+          <button className="icon-text-button" disabled={!canViewSites} onClick={() => onPreview(site.id)} type="button">
+            <FileCode2 size={15} />
+            Preview
+          </button>
+          <button
+            className="icon-text-button"
+            disabled={!canManageSites || !readiness?.ready}
+            onClick={() => onMarkReady(site.id)}
+            type="button"
+          >
+            <ShieldCheck size={15} />
+            Mark Ready
+          </button>
+          <button
+            className="icon-text-button"
+            disabled={!canViewSites || site.provisioning_status !== "ready_to_apply"}
+            onClick={() => onPlan(site.id)}
+            type="button"
+          >
+            <FileText size={15} />
+            Plan / Dry-run / Apply
+          </button>
+        </div>
+        <div className="web-actions-group web-actions-danger">
+          <span>Lifecycle</span>
+          <button
+            className="icon-text-button state-disabled"
+            disabled={!canManageSites || site.status === "disabled"}
+            onClick={() => onDisableRecord(site.id)}
+            type="button"
+          >
+            <Lock size={15} />
+            Disable record
+          </button>
+          <button
+            className="icon-text-button state-disabled"
+            disabled={!canManageSites || site.status !== "applied" || !realAgentAvailable}
+            onClick={() => onDisableSite(site)}
+            title={!realAgentAvailable ? "Requires a connected local Agent" : undefined}
+            type="button"
+          >
+            <Lock size={15} />
+            Disable site
+          </button>
+          <button
+            className="icon-text-button"
+            disabled={!canManageSites || !["disabled", "error"].includes(site.status) || !realAgentAvailable}
+            onClick={() => onReapply(site)}
+            title={!realAgentAvailable ? "Requires a connected local Agent" : undefined}
+            type="button"
+          >
+            <ShieldCheck size={15} />
+            Re-Apply
+          </button>
+        </div>
+      </div>
+    </details>
+  );
+}
+
 function PreflightPanel({ preflight }: { preflight: WebSitePreflight }) {
   return (
     <div className="apply-plan-section">
@@ -1383,35 +1504,6 @@ function siteSummaryLabel(site: WebSite) {
   if (site.provisioning_status === "ready_to_apply") return "Ready for Nginx apply";
   if (site.provisioning_status === "config_previewed") return "Nginx preview generated";
   return "Config pending";
-}
-
-function WebSectionCard({ section }: { section: WebSectionStatus }) {
-  const Icon = sectionIcons[section.slug as keyof typeof sectionIcons] ?? FileText;
-
-  return (
-    <article className="web-section-card">
-      <div className="web-section-card-header">
-        <span className="summary-icon">
-          <Icon size={17} />
-        </span>
-        <span className="state-pill">
-          {section.status === "available" ? <ShieldCheck size={14} /> : <Lock size={14} />}
-          {sectionStatusLabel(section.status)}
-        </span>
-      </div>
-      <h3>{section.name}</h3>
-      <p>{section.description}</p>
-      <button className={`icon-text-button ${section.action_available ? "" : "state-disabled"}`} disabled type="button">
-        {section.action_available ? <ShieldCheck size={15} /> : <Lock size={15} />}
-        {section.action_label}
-      </button>
-    </article>
-  );
-}
-
-function sectionStatusLabel(status: WebSectionStatus["status"]) {
-  if (status === "available") return "Available";
-  return status === "coming_soon" ? "Coming soon" : "Unavailable";
 }
 
 function fallbackSections(): WebSectionStatus[] {

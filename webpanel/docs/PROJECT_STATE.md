@@ -121,7 +121,7 @@ Last updated: 2026-06-16
 
 - v0.1 is a controlled lab/admin release, not a production installer.
 - Windows dev intentionally uses Agent fallback when the local Agent is unavailable; controlled Nginx actions require a real connected Agent.
-- Ubuntu lab validation could not be rerun from this workstation on 2026-06-16 because `192.168.122.7:8080` timed out and SSH alias `hostpilot-lab` was refused.
+- Ubuntu lab validation could not be rerun from this workstation on 2026-06-16. The new lab SSH port at `192.168.0.64:22` is reachable, but password authentication failed for both `rattes` and `root`, so key installation is still pending.
 - SSL automation is not implemented.
 - PHP-FPM install/config/management is not implemented.
 - Domain/DNS automation is not implemented.
@@ -148,7 +148,8 @@ Last updated: 2026-06-16
 ## Lab Notes
 
 - Ubuntu lab SSH alias remains `hostpilot-lab`.
-- Lab IP reference is `192.168.122.7`.
-- Lab UI remains `http://192.168.122.7:8080`.
+- Lab IP reference is `192.168.0.64`.
+- Lab UI remains `http://192.168.0.64:8080`.
 - Lab Core remains bound to `127.0.0.1:8000` on the lab.
 - Lab Agent remains bound to `127.0.0.1:8765` on the lab.
+- Local SSH alias is pointed at `rattes@192.168.0.64` with `~/.ssh/hostpilot_lab`, pending successful key installation on the lab.

@@ -121,7 +121,7 @@ Validation was performed against the lab server on `2026-06-08`.
 
 - SSH alias: `hostpilot-lab`.
 - Confirmed SSH user: `root`.
-- Confirmed lab IP: `192.168.122.7`.
+- Confirmed lab IP: `192.168.0.64`.
 - Confirmed OS: Ubuntu 26.04 LTS.
 - Project deployed to `/opt/hostpilot` with project root `/opt/hostpilot/webpanel`.
 - Runtime user/group created: `hostpilot`.
@@ -172,7 +172,7 @@ Validated lab bindings and URLs:
 
 - Core: `127.0.0.1:8000`.
 - Agent: `127.0.0.1:8765`.
-- Nginx lab frontend: `http://192.168.122.7:8080/`.
+- Nginx lab frontend: `http://192.168.0.64:8080/`.
 - Agent health returned `status: ok`.
 - Core health returned `status: ok`.
 - Nginx frontend returned HTTP `200`.

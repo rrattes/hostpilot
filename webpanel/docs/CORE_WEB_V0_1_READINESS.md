@@ -39,7 +39,8 @@ Remaining limitations are known and intentionally scoped out of v0.1. The most i
   - row Actions menu contained Files, Logs, Preview, Mark Ready, Plan / Dry-run / Apply, Disable record, Disable site, and Re-Apply;
   - controlled Agent actions were disabled while Agent state was fallback.
 - Ubuntu lab validation:
-  - not rerun on 2026-06-16 because `http://192.168.122.7:8080` timed out from this workstation and SSH alias `hostpilot-lab` refused connection.
+  - not rerun on 2026-06-16 because the new lab at `192.168.0.64` accepts TCP connections on port `22`, but password authentication failed for both `rattes` and `root`;
+  - SSH key installation, OS detection, and sudo validation remain pending until valid credentials are available;
   - Previous controlled Nginx apply validation remains documented in `docs/deploy/ubuntu-lab-deploy.md`.
 
 ## Readiness Matrix
@@ -122,7 +123,7 @@ v0.1 decision: **keep a simple 60-minute stateless JWT session.**
 
 ## Ordered Fix Plan After v0.1
 
-1. Rerun the full Ubuntu lab validation for the latest `main` once `192.168.122.7` is reachable.
+1. Rerun the full Ubuntu lab validation for the latest `main` once `192.168.0.64` is reachable.
 2. Add a production deployment hardening plan separate from the lab installer.
 3. Expand Core backup scope with restore, scheduling, and remote storage decisions.
 4. Add SSL automation only after the Nginx controlled apply/rollback model is stable.

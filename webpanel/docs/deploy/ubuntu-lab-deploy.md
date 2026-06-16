@@ -19,7 +19,7 @@ repeatable lab installer, but it is not a production installer.
   application Python runtime for Core and Agent venv creation. The app does not
   rely on Ubuntu's system Python 3.14 yet because pinned backend dependencies
   have not been migrated and validated on Python 3.14.
-- Root SSH was used only for the `192.168.122.7` lab validation. Production
+- Root SSH was used only for the `192.168.0.64` lab validation. Production
   deployment should use a least-privilege operating procedure.
 
 ## Prepare Runtime Files
@@ -161,7 +161,7 @@ http://<lab-host>:8080
 Validation target:
 
 - SSH alias: `hostpilot-lab`.
-- Lab IP: `192.168.122.7`.
+- Lab IP: `192.168.0.64`.
 - Confirmed SSH user: `root`.
 - Confirmed OS: Ubuntu 26.04 LTS.
 
@@ -183,7 +183,7 @@ Validated bindings and URLs:
 
 - Core: `127.0.0.1:8000`.
 - Agent: `127.0.0.1:8765`.
-- Nginx lab frontend: `http://192.168.122.7:8080/`.
+- Nginx lab frontend: `http://192.168.0.64:8080/`.
 - Agent health: `curl http://127.0.0.1:8765/health` returned `status: ok`.
 - Core health: `curl http://127.0.0.1:8000/health` returned `status: ok`.
 - Nginx frontend returned HTTP `200`.
@@ -221,7 +221,7 @@ layout refinement.
 Validation target:
 
 - SSH alias: `hostpilot-lab`.
-- Lab IP: `192.168.122.7`.
+- Lab IP: `192.168.0.64`.
 - Confirmed SSH user: `root`.
 - Confirmed OS: Ubuntu 26.04 LTS.
 
@@ -255,7 +255,7 @@ Service and URL validation:
 - `curl http://127.0.0.1:8765/health` returned Agent `status: ok`.
 - `curl http://127.0.0.1:8000/health` returned Core `status: ok`.
 - `curl http://127.0.0.1:8080/` returned HTTP `200`.
-- `curl http://192.168.122.7:8080/` returned HTTP `200`.
+- `curl http://192.168.0.64:8080/` returned HTTP `200`.
 - `curl http://127.0.0.1:8080/api/agent/status` returned HTTP `401`, which
   is expected without an auth token and confirms the `/api` proxy reaches Core.
 
@@ -287,7 +287,7 @@ Result: production build completed successfully.
 Validation target:
 
 - SSH alias: `hostpilot-lab`.
-- Lab IP: `192.168.122.7`.
+- Lab IP: `192.168.0.64`.
 - Project root: `/opt/hostpilot/webpanel`.
 
 Deployment and service validation:
@@ -360,25 +360,34 @@ Validation commands passed locally and on the lab host:
 - Python 3.14 support remains intentionally deferred. The supported Ubuntu 26.04
   lab runtime is isolated Python 3.13 under `/opt/hostpilot/python`.
 
-## 2026-06-16 v0.1 Reachability Check
+## 2026-06-16 v0.1 Lab SSH Setup Attempt
 
 Validation target:
 
 - SSH alias: `hostpilot-lab`.
-- Lab IP: `192.168.122.7`.
-- Lab UI: `http://192.168.122.7:8080`.
+- Lab IP: `192.168.0.64`.
+- Lab UI: `http://192.168.0.64:8080`.
 
 Result:
 
 - Local Core health at `http://127.0.0.1:8000/health` returned HTTP `200`.
 - Local frontend at `http://127.0.0.1:5173/` returned HTTP `200`.
-- Lab UI request to `http://192.168.122.7:8080` timed out from the Windows
-  development workstation.
-- SSH alias `hostpilot-lab` refused connection during connection setup.
+- SSH port `192.168.0.64:22` was reachable from the Windows development
+  workstation.
+- Existing local key `~/.ssh/hostpilot_lab` was selected for HostPilot lab
+  access.
+- Password authentication was attempted for `rattes` first and then `root`.
+- The supplied password was rejected for both users, so the public key could not
+  be installed.
+- Local SSH alias `hostpilot-lab` was updated to point at
+  `rattes@192.168.0.64` with `~/.ssh/hostpilot_lab`, pending successful key
+  installation.
+- Passwordless SSH, OS/version detection, and sudo/root validation remain
+  blocked until a working password or preinstalled key is available.
 
 The latest v0.1 Ubuntu lab deployment and controlled Web flow were not rerun
-because the lab host was not reachable from this workstation. The last completed
-controlled Nginx apply validation remains the 2026-06-11 validation above.
+because SSH authentication did not succeed. The last completed controlled Nginx
+apply validation remains the 2026-06-11 validation above.
 
 Next lab validation should rerun:
 

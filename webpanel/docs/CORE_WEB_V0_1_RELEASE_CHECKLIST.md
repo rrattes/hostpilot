@@ -64,20 +64,24 @@ Overall result: **Pass for controlled v0.1 lab/admin release, with Ubuntu lab re
 
 | Check | Result | Notes |
 | --- | --- | --- |
-| Lab UI reachability | Blocked | `http://192.168.122.7:8080` timed out from this workstation. |
-| SSH alias reachability | Blocked | `ssh hostpilot-lab` was refused during connection setup. |
-| Deploy latest main | Not run | Blocked by lab reachability. |
-| Run migrations | Not run | Blocked by lab reachability. |
-| Restart Core/Agent/Nginx | Not run | Blocked by lab reachability. |
-| Core health on lab | Not run | Blocked by lab reachability. |
-| Agent health on lab | Not run | Blocked by lab reachability. |
-| UI HTTP 200 on lab | Not run | Blocked by lab reachability. |
-| Login on lab | Not run | Blocked by lab reachability. |
-| Web create/list on lab | Not run | Blocked by lab reachability. |
-| Files/Logs on lab | Not run | Blocked by lab reachability. |
-| Preview/plan/dry-run/preflight on lab | Not run | Blocked by lab reachability. |
-| Controlled apply/disable/reapply on lab | Not run | Blocked by lab reachability. |
-| Audit/job records on lab | Not run | Blocked by lab reachability. |
+| SSH port reachability | Pass | `192.168.0.64:22` is reachable. |
+| SSH password authentication | Blocked | Supplied password was rejected for both `rattes` and `root`. |
+| SSH key installation | Blocked | Requires successful password login first. |
+| SSH alias validation | Blocked | `hostpilot-lab` points to `rattes@192.168.0.64` with `~/.ssh/hostpilot_lab`, but passwordless login cannot pass until the public key is installed. |
+| OS/version | Not run | Blocked by SSH authentication. |
+| Sudo/root access | Not run | Blocked by SSH authentication. |
+| Deploy latest main | Not run | Blocked by SSH authentication. |
+| Run migrations | Not run | Blocked by SSH authentication. |
+| Restart Core/Agent/Nginx | Not run | Blocked by SSH authentication. |
+| Core health on lab | Not run | Blocked by SSH authentication. |
+| Agent health on lab | Not run | Blocked by SSH authentication. |
+| UI HTTP 200 on lab | Not run | Blocked by SSH authentication. |
+| Login on lab | Not run | Blocked by SSH authentication. |
+| Web create/list on lab | Not run | Blocked by SSH authentication. |
+| Files/Logs on lab | Not run | Blocked by SSH authentication. |
+| Preview/plan/dry-run/preflight on lab | Not run | Blocked by SSH authentication. |
+| Controlled apply/disable/reapply on lab | Not run | Blocked by SSH authentication. |
+| Audit/job records on lab | Not run | Blocked by SSH authentication. |
 
 Previous controlled Nginx apply validation on the Ubuntu lab is documented in `docs/deploy/ubuntu-lab-deploy.md`.
 

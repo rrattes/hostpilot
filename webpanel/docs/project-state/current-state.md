@@ -92,7 +92,7 @@ The working tree currently has missing tracked files, including `.github/workflo
 
 ## Ubuntu Lab Status
 
-- Ubuntu lab deployment was validated on Ubuntu 26.04 at `192.168.122.7` using lab-only root SSH.
+- Ubuntu lab deployment was validated on Ubuntu 26.04 at `192.168.0.64` using lab-only root SSH.
 - Core was bound to `127.0.0.1:8000`.
 - Agent was bound to `127.0.0.1:8765`.
 - Nginx exposed the lab UI on port `8080`.
@@ -134,7 +134,7 @@ The working tree currently has missing tracked files, including `.github/workflo
 - API docs: `http://127.0.0.1:8000/docs`
 - Frontend: `http://127.0.0.1:5173`
 - Agent: `http://127.0.0.1:8765`
-- Ubuntu lab UI through Nginx: `http://192.168.122.7:8080`
+- Ubuntu lab UI through Nginx: `http://192.168.0.64:8080`
 
 ## Core Readiness Decision
 

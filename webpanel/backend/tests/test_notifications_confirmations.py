@@ -138,7 +138,8 @@ def test_mark_all_as_read() -> None:
     assert '"count": "2"' in audit_event.metadata_json
 
 
-def test_notification_created_from_mock_agent_job() -> None:
+def test_notification_created_from_mock_agent_job(monkeypatch) -> None:
+    monkeypatch.setenv("HOSTPILOT_ENABLE_DEV_ACTIONS", "true")
     token, user_id = _token(
         "operator@example.com",
         ["agent.execute_mock", "notifications.view"],

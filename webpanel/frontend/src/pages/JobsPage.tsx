@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 import { createMockJob, listJobs, type Job } from "../core/api/jobs";
 import { useAuth } from "../core/auth/AuthProvider";
 
-export function JobsPage() {
+interface JobsPageProps {
+  devActionsEnabled: boolean;
+}
+
+export function JobsPage({ devActionsEnabled }: JobsPageProps) {
   const { token } = useAuth();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [total, setTotal] = useState(0);
@@ -55,10 +59,12 @@ export function JobsPage() {
         </div>
         <div className="page-actions">
           <span className="count-pill">{total} jobs</span>
-          <button className="primary-button compact" disabled={isCreating} onClick={handleCreateMockJob} type="button">
-            <Plus size={16} />
-            Mock job
-          </button>
+          {devActionsEnabled ? (
+            <button className="primary-button compact" disabled={isCreating} onClick={handleCreateMockJob} type="button">
+              <Plus size={16} />
+              Development only: mock job
+            </button>
+          ) : null}
         </div>
       </div>
 

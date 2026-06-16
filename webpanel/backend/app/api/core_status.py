@@ -7,6 +7,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.agent_gateway.service import get_agent_status
+from app.core.auth.security import dev_actions_enabled
 from app.core.rbac.permissions import require_permission
 from app.db.models import AuditEvent, Job, Module, Server
 from app.db.session import get_db
@@ -40,6 +41,7 @@ class CoreStatus(BaseModel):
     database: str
     agent_mode: str
     agent_web_actions_use_real_agent: bool
+    dev_actions_enabled: bool
     local_server: LocalServerStatus | None
     enabled_modules_count: int
     locked_modules_count: int
@@ -76,6 +78,7 @@ def get_core_status(db: Session = Depends(get_db)) -> CoreStatus:
         database="SQLite",
         agent_mode=str(agent_status["mode"]),
         agent_web_actions_use_real_agent=bool(agent_status["web_actions_use_real_agent"]),
+        dev_actions_enabled=dev_actions_enabled(),
         local_server=_local_server_status(local_server) if local_server is not None else None,
         enabled_modules_count=db.scalar(select(func.count()).where(Module.state == "enabled")) or 0,
         locked_modules_count=db.scalar(select(func.count()).where(Module.state == "locked")) or 0,

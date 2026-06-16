@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.agent_gateway.service import execute_mock_agent_action, get_agent_status
 from app.core.auth.dependencies import get_current_user
+from app.core.auth.security import dev_actions_enabled
 from app.core.rbac.permissions import require_permission
 from app.db.models import Job, User
 from app.db.session import get_db
@@ -23,6 +24,7 @@ class AgentStatus(BaseModel):
     using_fallback: bool
     fallback_enabled: bool
     web_actions_use_real_agent: bool
+    dev_actions_enabled: bool
     message: str
 
 
@@ -63,6 +65,12 @@ def execute_action(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> AgentActionResult:
+    if not dev_actions_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Development-only Agent actions are disabled.",
+        )
+
     job, response = execute_mock_agent_action(
         db,
         action=action_name,

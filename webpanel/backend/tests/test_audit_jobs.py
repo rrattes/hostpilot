@@ -139,7 +139,22 @@ def test_list_jobs_requires_jobs_view_and_filters() -> None:
     assert response.json()["items"][0]["status"] == "queued"
 
 
-def test_create_mock_job_writes_audit_event() -> None:
+def test_create_mock_job_disabled_by_default() -> None:
+    token = _token("jobs@example.com", ["jobs.view"])
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/core/jobs/mock",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"module": "core", "action": "mock.dev", "payload": "{\"dryRun\":true}"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Development-only mock job creation is disabled."
+
+
+def test_create_mock_job_writes_audit_event(monkeypatch) -> None:
+    monkeypatch.setenv("HOSTPILOT_ENABLE_DEV_ACTIONS", "true")
     token = _token("jobs@example.com", ["jobs.view"])
     client = TestClient(app)
 

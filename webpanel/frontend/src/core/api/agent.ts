@@ -10,6 +10,7 @@ export interface AgentStatus {
   using_fallback: boolean;
   fallback_enabled: boolean;
   web_actions_use_real_agent: boolean;
+  dev_actions_enabled: boolean;
   message: string;
 }
 

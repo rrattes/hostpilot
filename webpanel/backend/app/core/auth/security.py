@@ -12,10 +12,15 @@ DEV_TEST_ENVIRONMENTS = {"dev", "development", "local", "test", "testing"}
 DEFAULT_DEV_SECRET_KEY = "dev-only-change-me"
 DEFAULT_ACCESS_TOKEN_EXPIRE_MINUTES = 60
 MIN_PASSWORD_LENGTH = 12
+TRUE_ENV_VALUES = {"1", "true", "yes", "on"}
 
 
 def get_runtime_environment() -> str:
     return os.getenv("HOSTPILOT_ENV", "development").strip().lower()
+
+
+def dev_actions_enabled() -> bool:
+    return os.getenv("HOSTPILOT_ENABLE_DEV_ACTIONS", "").strip().lower() in TRUE_ENV_VALUES
 
 
 def get_access_token_expire_minutes() -> int:

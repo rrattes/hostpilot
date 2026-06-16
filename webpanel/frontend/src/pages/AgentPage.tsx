@@ -78,14 +78,22 @@ export function AgentPage({ canExecuteMock }: AgentPageProps) {
           <strong>{status?.web_actions_use_real_agent ? "Real Agent" : "Not real Agent"}</strong>
           <p>{status?.using_fallback ? "Windows/dev fallback is active and clearly labeled." : "No arbitrary commands are exposed."}</p>
         </div>
+        {status?.dev_actions_enabled ? (
+          <div className="summary-panel">
+            <span className="metric-label">Development only</span>
+            <strong>Mock actions enabled</strong>
+            <p>These actions are hidden in normal v0.1 mode.</p>
+          </div>
+        ) : null}
       </div>
 
+      {status?.dev_actions_enabled ? (
       <div className="module-grid">
         {status?.allowed_actions.map((action) => (
           <article className="module-card disabled" key={action}>
             <div className="module-card-header">
               <h3>{action}</h3>
-              <span className="state-pill">{status.using_real_agent ? "Agent" : "Fallback"}</span>
+              <span className="state-pill">Development only</span>
             </div>
             <p>Allowlisted mock action exposed by the development agent contract.</p>
             {canExecuteMock ? (
@@ -97,6 +105,7 @@ export function AgentPage({ canExecuteMock }: AgentPageProps) {
           </article>
         ))}
       </div>
+      ) : null}
 
       <div className="data-table-wrap">
         <table className="data-table">

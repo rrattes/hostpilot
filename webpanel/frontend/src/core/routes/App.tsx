@@ -327,7 +327,7 @@ function renderProtectedPage(
   }
   if (path === "/jobs") {
     return hasPermission("jobs.view") ? (
-      <JobsPage />
+      <JobsPage devActionsEnabled={healthStatus?.dev_actions_enabled === true} />
     ) : (
       <DashboardPage
         agentStatus={agentStatus}

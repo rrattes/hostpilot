@@ -13,7 +13,7 @@ from app.core.agent_gateway.local_client import (
 )
 from app.core.agent_gateway.mock_client import allowed_mock_actions, run_mock_action
 from app.core.audit.events import record_audit_event
-from app.core.auth.security import DEV_TEST_ENVIRONMENTS, get_runtime_environment
+from app.core.auth.security import DEV_TEST_ENVIRONMENTS, dev_actions_enabled, get_runtime_environment
 from app.core.notifications.events import create_notification
 from app.db.models import Job, User
 
@@ -36,6 +36,7 @@ def get_agent_status() -> dict[str, object]:
             "using_fallback": False,
             "fallback_enabled": fallback_enabled,
             "web_actions_use_real_agent": is_connected,
+            "dev_actions_enabled": dev_actions_enabled(),
             "message": "Local Agent is connected." if is_connected else "Local Agent responded unhealthy.",
         }
     except LocalAgentTransportError as exc:
@@ -49,6 +50,7 @@ def get_agent_status() -> dict[str, object]:
                 "using_fallback": True,
                 "fallback_enabled": True,
                 "web_actions_use_real_agent": False,
+                "dev_actions_enabled": dev_actions_enabled(),
                 "message": "Local Agent is unavailable; Windows/dev mock fallback is active.",
             }
         logger.error("Local agent unavailable and fallback disabled: %s", exc)
@@ -60,6 +62,7 @@ def get_agent_status() -> dict[str, object]:
             "using_fallback": False,
             "fallback_enabled": False,
             "web_actions_use_real_agent": False,
+            "dev_actions_enabled": dev_actions_enabled(),
             "message": "Local Agent is unavailable and fallback is disabled.",
         }
 

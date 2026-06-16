@@ -52,7 +52,22 @@ def _token(email: str, permission_slugs: list[str]) -> str:
         return create_access_token(user.id)
 
 
-def test_unknown_action_rejected_and_job_failed() -> None:
+def test_dev_agent_action_endpoint_disabled_by_default() -> None:
+    token = _token("operator@example.com", ["agent.execute_mock"])
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/agent/actions/mock.health",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"payload": {}},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Development-only Agent actions are disabled."
+
+
+def test_unknown_action_rejected_and_job_failed(monkeypatch) -> None:
+    monkeypatch.setenv("HOSTPILOT_ENABLE_DEV_ACTIONS", "true")
     token = _token("operator@example.com", ["agent.execute_mock"])
     client = TestClient(app)
 
@@ -88,7 +103,8 @@ def test_viewer_cannot_execute_mock_action() -> None:
     assert response.status_code == 403
 
 
-def test_operator_can_execute_mock_action() -> None:
+def test_operator_can_execute_mock_action(monkeypatch) -> None:
+    monkeypatch.setenv("HOSTPILOT_ENABLE_DEV_ACTIONS", "true")
     token = _token("operator@example.com", ["agent.execute_mock"])
     client = TestClient(app)
 
@@ -123,6 +139,7 @@ def test_agent_status_connected_when_local_agent_health_ok(monkeypatch) -> None:
     assert payload["using_real_agent"] is True
     assert payload["using_fallback"] is False
     assert payload["web_actions_use_real_agent"] is True
+    assert payload["dev_actions_enabled"] is False
     assert payload["mode"] == "local-http"
 
 
@@ -168,6 +185,7 @@ def test_agent_status_unavailable_when_local_agent_unavailable_without_fallback(
 
 
 def test_operator_action_uses_local_agent_transport(monkeypatch) -> None:
+    monkeypatch.setenv("HOSTPILOT_ENABLE_DEV_ACTIONS", "true")
     captured_request: AgentActionRequest | None = None
 
     def fake_execute_local_agent_action(request: AgentActionRequest) -> AgentActionResponse:
@@ -203,6 +221,8 @@ def test_operator_action_uses_local_agent_transport(monkeypatch) -> None:
 
 
 def test_dev_fallback_to_mock_logged_when_local_agent_unavailable(caplog, monkeypatch) -> None:
+    monkeypatch.setenv("HOSTPILOT_ENABLE_DEV_ACTIONS", "true")
+
     def raise_transport_error(request: AgentActionRequest) -> AgentActionResponse:
         raise LocalAgentTransportError("offline")
 
@@ -225,7 +245,8 @@ def test_dev_fallback_to_mock_logged_when_local_agent_unavailable(caplog, monkey
     assert "using dev mock fallback" in caplog.text
 
 
-def test_job_created_and_completed_with_result() -> None:
+def test_job_created_and_completed_with_result(monkeypatch) -> None:
+    monkeypatch.setenv("HOSTPILOT_ENABLE_DEV_ACTIONS", "true")
     token = _token("operator@example.com", ["agent.execute_mock"])
     client = TestClient(app)
 
@@ -246,7 +267,8 @@ def test_job_created_and_completed_with_result() -> None:
     assert json.loads(job.result)["data"]["hostname"] == "hostpilot-local-dev"
 
 
-def test_audit_event_created_for_agent_action() -> None:
+def test_audit_event_created_for_agent_action(monkeypatch) -> None:
+    monkeypatch.setenv("HOSTPILOT_ENABLE_DEV_ACTIONS", "true")
     token = _token("operator@example.com", ["agent.execute_mock"])
     client = TestClient(app)
 

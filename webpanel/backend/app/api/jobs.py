@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.audit.events import record_audit_event
 from app.core.auth.dependencies import get_current_user
+from app.core.auth.security import dev_actions_enabled
 from app.core.rbac.permissions import require_permission
 from app.db.models import Job, User
 from app.db.session import get_db
@@ -92,6 +93,12 @@ def create_mock_job(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> JobRead:
+    if not dev_actions_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Development-only mock job creation is disabled.",
+        )
+
     job = Job(
         type="mock",
         module=payload.module,

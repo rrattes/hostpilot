@@ -20,6 +20,7 @@ export interface CoreHealthStatus {
   database: string;
   agent_mode: string;
   agent_web_actions_use_real_agent: boolean;
+  dev_actions_enabled: boolean;
   local_server: LocalServerStatus | null;
   enabled_modules_count: number;
   locked_modules_count: number;

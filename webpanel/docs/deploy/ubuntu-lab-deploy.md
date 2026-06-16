@@ -19,7 +19,7 @@ repeatable lab installer, but it is not a production installer.
   application Python runtime for Core and Agent venv creation. The app does not
   rely on Ubuntu's system Python 3.14 yet because pinned backend dependencies
   have not been migrated and validated on Python 3.14.
-- Root SSH was used only for the `192.168.0.63` lab validation. Production
+- Root SSH was used only for the `192.168.122.7` lab validation. Production
   deployment should use a least-privilege operating procedure.
 
 ## Prepare Runtime Files
@@ -161,7 +161,7 @@ http://<lab-host>:8080
 Validation target:
 
 - SSH alias: `hostpilot-lab`.
-- Lab IP: `192.168.0.63`.
+- Lab IP: `192.168.122.7`.
 - Confirmed SSH user: `root`.
 - Confirmed OS: Ubuntu 26.04 LTS.
 
@@ -183,7 +183,7 @@ Validated bindings and URLs:
 
 - Core: `127.0.0.1:8000`.
 - Agent: `127.0.0.1:8765`.
-- Nginx lab frontend: `http://192.168.0.63:8080/`.
+- Nginx lab frontend: `http://192.168.122.7:8080/`.
 - Agent health: `curl http://127.0.0.1:8765/health` returned `status: ok`.
 - Core health: `curl http://127.0.0.1:8000/health` returned `status: ok`.
 - Nginx frontend returned HTTP `200`.
@@ -221,7 +221,7 @@ layout refinement.
 Validation target:
 
 - SSH alias: `hostpilot-lab`.
-- Lab IP: `192.168.0.63`.
+- Lab IP: `192.168.122.7`.
 - Confirmed SSH user: `root`.
 - Confirmed OS: Ubuntu 26.04 LTS.
 
@@ -255,7 +255,7 @@ Service and URL validation:
 - `curl http://127.0.0.1:8765/health` returned Agent `status: ok`.
 - `curl http://127.0.0.1:8000/health` returned Core `status: ok`.
 - `curl http://127.0.0.1:8080/` returned HTTP `200`.
-- `curl http://192.168.0.63:8080/` returned HTTP `200`.
+- `curl http://192.168.122.7:8080/` returned HTTP `200`.
 - `curl http://127.0.0.1:8080/api/agent/status` returned HTTP `401`, which
   is expected without an auth token and confirms the `/api` proxy reaches Core.
 
@@ -287,7 +287,7 @@ Result: production build completed successfully.
 Validation target:
 
 - SSH alias: `hostpilot-lab`.
-- Lab IP: `192.168.0.63`.
+- Lab IP: `192.168.122.7`.
 - Project root: `/opt/hostpilot/webpanel`.
 
 Deployment and service validation:

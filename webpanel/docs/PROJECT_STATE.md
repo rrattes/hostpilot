@@ -102,6 +102,9 @@ Last updated: 2026-06-12
 - Do not store plaintext passwords in repository docs.
 - Do not reset the local admin password unless explicitly instructed.
 - Do not reset or recreate the local database unless explicitly instructed.
+- First-run admin creation uses `backend/app/scripts/bootstrap_admin.py`.
+- Re-running bootstrap for an existing admin is non-destructive by default and does not change the password.
+- To intentionally rotate an existing admin password, run bootstrap with `--reset-password`.
 
 ## Latest UI And Dashboard Changes
 

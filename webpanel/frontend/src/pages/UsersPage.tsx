@@ -11,6 +11,7 @@ import {
   type ManagedUser,
   type RoleItem,
 } from "../core/api/users";
+import { apiErrorMessage } from "../core/api/client";
 import { useAuth } from "../core/auth/AuthProvider";
 
 const DEFAULT_ROLE = "viewer";
@@ -38,8 +39,8 @@ export function UsersPage() {
       setUsers(userResponse);
       setRoles(roleResponse);
       setError(null);
-    } catch {
-      setError("Unable to load users.");
+    } catch (loadError) {
+      setError(apiErrorMessage(loadError, "Unable to load users."));
     }
   }
 
@@ -67,8 +68,8 @@ export function UsersPage() {
       });
       setMessage(`Created ${created.email}.`);
       setError(null);
-    } catch {
-      setError("Unable to create user.");
+    } catch (createError) {
+      setError(apiErrorMessage(createError, "Unable to create user."));
       setMessage(null);
     }
   }
@@ -80,8 +81,8 @@ export function UsersPage() {
       updateUserInList(updated);
       setMessage(`${updated.email} is now ${updated.is_active ? "active" : "disabled"}.`);
       setError(null);
-    } catch {
-      setError("Unable to update active status.");
+    } catch (activeError) {
+      setError(apiErrorMessage(activeError, "Unable to update active status."));
       setMessage(null);
     }
   }
@@ -93,8 +94,8 @@ export function UsersPage() {
       updateUserInList(updated);
       setMessage(`Updated roles for ${updated.email}.`);
       setError(null);
-    } catch {
-      setError("Unable to update user roles.");
+    } catch (roleError) {
+      setError(apiErrorMessage(roleError, "Unable to update user roles."));
       setMessage(null);
     }
   }
@@ -108,8 +109,8 @@ export function UsersPage() {
       setPasswordDrafts((current) => ({ ...current, [user.id]: "" }));
       setMessage(`Password reset for ${updated.email}.`);
       setError(null);
-    } catch {
-      setError("Unable to reset password.");
+    } catch (passwordError) {
+      setError(apiErrorMessage(passwordError, "Unable to reset password."));
       setMessage(null);
     }
   }

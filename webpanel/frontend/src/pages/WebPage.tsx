@@ -47,7 +47,7 @@ import {
   type WebStatus,
 } from "../core/api/web";
 import type { AgentStatus } from "../core/api/agent";
-import { ApiError } from "../core/api/client";
+import { apiErrorMessage } from "../core/api/client";
 import { useAuth } from "../core/auth/AuthProvider";
 
 const sectionIcons = {
@@ -115,7 +115,9 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
         setStatus(response);
         setError(null);
       })
-      .catch(() => setError("Unable to load Web module scaffold status."));
+      .catch((loadError) =>
+        setError(apiErrorMessage(loadError, "Unable to load Web module scaffold status.")),
+      );
   }, [token]);
 
   async function loadSites() {
@@ -129,8 +131,8 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
       setSites(response);
       await loadReadiness(response);
       setSiteError(null);
-    } catch {
-      setSiteError("Unable to load Web site registry records.");
+    } catch (loadError) {
+      setSiteError(apiErrorMessage(loadError, "Unable to load Web site registry records."));
     }
   }
 
@@ -181,11 +183,7 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
       setSiteError(null);
       setSiteMessage(`${created.domain} recorded as config pending. No files or services were changed.`);
     } catch (createError) {
-      setSiteError(
-        createError instanceof ApiError
-          ? createError.message
-          : "Unable to create Web site record.",
-      );
+      setSiteError(apiErrorMessage(createError, "Unable to create Web site record."));
       setSiteMessage(null);
     } finally {
       setIsCreatingSite(false);
@@ -203,11 +201,7 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
       setSiteError(null);
       setSiteMessage(`${disabled.domain} disabled as a registry record only.`);
     } catch (disableError) {
-      setSiteError(
-        disableError instanceof ApiError
-          ? disableError.message
-          : "Unable to disable Web site record.",
-      );
+      setSiteError(apiErrorMessage(disableError, "Unable to disable Web site record."));
       setSiteMessage(null);
     }
   }
@@ -226,11 +220,7 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
       );
       setSiteError(null);
     } catch (previewError) {
-      setSiteError(
-        previewError instanceof ApiError
-          ? previewError.message
-          : "Unable to generate Nginx config preview.",
-      );
+      setSiteError(apiErrorMessage(previewError, "Unable to generate Nginx config preview."));
       setNginxPreview(null);
     }
   }
@@ -246,11 +236,7 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
       setSiteError(null);
       setSiteMessage(`${readySite.domain} is ready to apply. No server changes were made.`);
     } catch (readyError) {
-      setSiteError(
-        readyError instanceof ApiError
-          ? readyError.message
-          : "Unable to mark Web site ready to apply.",
-      );
+      setSiteError(apiErrorMessage(readyError, "Unable to mark Web site ready to apply."));
       setSiteMessage(null);
     }
   }
@@ -266,11 +252,7 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
       setApplyResult(null);
       setSiteError(null);
     } catch (planError) {
-      setSiteError(
-        planError instanceof ApiError
-          ? planError.message
-          : "Unable to generate Nginx apply plan.",
-      );
+      setSiteError(apiErrorMessage(planError, "Unable to generate Nginx apply plan."));
       setApplyPlan(null);
     }
   }
@@ -284,11 +266,7 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
       setSiteError(null);
       setSiteMessage(`${result.domain} dry-run completed. No files, commands, or services changed.`);
     } catch (dryRunError) {
-      setSiteError(
-        dryRunError instanceof ApiError
-          ? dryRunError.message
-          : "Unable to run Nginx dry-run.",
-      );
+      setSiteError(apiErrorMessage(dryRunError, "Unable to run Nginx dry-run."));
       setDryRunResult(null);
     }
   }
@@ -307,11 +285,7 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
           : `${result.site.domain} apply failed through Agent job #${result.job_id}.`,
       );
     } catch (applyError) {
-      setSiteError(
-        applyError instanceof ApiError
-          ? applyError.message
-          : "Unable to apply Nginx config.",
-      );
+      setSiteError(apiErrorMessage(applyError, "Unable to apply Nginx config."));
       setApplyResult(null);
     }
   }
@@ -332,11 +306,7 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
           : `${result.site.domain} disable failed through Agent job #${result.job_id}.`,
       );
     } catch (disableError) {
-      setSiteError(
-        disableError instanceof ApiError
-          ? disableError.message
-          : "Unable to disable Nginx config.",
-      );
+      setSiteError(apiErrorMessage(disableError, "Unable to disable Nginx config."));
       setDisableResult(null);
     }
   }
@@ -364,11 +334,7 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
           : `${result.site.domain} re-apply failed through Agent job #${result.job_id}.`,
       );
     } catch (reapplyError) {
-      setSiteError(
-        reapplyError instanceof ApiError
-          ? reapplyError.message
-          : "Unable to re-apply Nginx config.",
-      );
+      setSiteError(apiErrorMessage(reapplyError, "Unable to re-apply Nginx config."));
       setReapplyResult(null);
     }
   }
@@ -393,11 +359,7 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
       setLogsResult(await getWebSiteLogs(token, site.id, 100));
       setSiteError(null);
     } catch (logsError) {
-      setSiteError(
-        logsError instanceof ApiError
-          ? logsError.message
-          : "Unable to load Web site logs.",
-      );
+      setSiteError(apiErrorMessage(logsError, "Unable to load Web site logs."));
       setLogsResult(null);
     } finally {
       setLogsLoading(false);
@@ -420,11 +382,7 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
       setFilesError(null);
       setSiteError(null);
     } catch (filesError) {
-      setFilesError(
-        filesError instanceof ApiError
-          ? filesError.message
-          : "Unable to load Web site files.",
-      );
+      setFilesError(apiErrorMessage(filesError, "Unable to load Web site files."));
       setFilesResult(null);
     } finally {
       setFilesLoading(false);

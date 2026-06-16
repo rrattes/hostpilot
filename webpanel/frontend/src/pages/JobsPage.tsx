@@ -2,6 +2,7 @@ import { Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { createMockJob, listJobs, type Job } from "../core/api/jobs";
+import { apiErrorMessage } from "../core/api/client";
 import { useAuth } from "../core/auth/AuthProvider";
 
 interface JobsPageProps {
@@ -25,8 +26,8 @@ export function JobsPage({ devActionsEnabled }: JobsPageProps) {
       setJobs(response.items);
       setTotal(response.total);
       setError(null);
-    } catch {
-      setError("Unable to load jobs.");
+    } catch (loadError) {
+      setError(apiErrorMessage(loadError, "Unable to load jobs."));
     }
   }
 
@@ -43,8 +44,8 @@ export function JobsPage({ devActionsEnabled }: JobsPageProps) {
     try {
       await createMockJob(token);
       await loadJobs();
-    } catch {
-      setError("Unable to create mock job.");
+    } catch (createError) {
+      setError(apiErrorMessage(createError, "Unable to create mock job."));
     } finally {
       setIsCreating(false);
     }

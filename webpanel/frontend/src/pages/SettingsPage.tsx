@@ -2,6 +2,7 @@ import { KeyRound, Save } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 
 import { changePassword } from "../core/api/auth";
+import { apiErrorMessage } from "../core/api/client";
 import { listSettings, updateSetting, type Setting } from "../core/api/settings";
 import { useAuth } from "../core/auth/AuthProvider";
 
@@ -37,7 +38,7 @@ export function SettingsPage({ canEdit }: SettingsPageProps) {
         setSettings(response);
         setDrafts(Object.fromEntries(response.map((setting) => [setting.key, setting.value])));
       })
-      .catch(() => setError("Unable to load settings."));
+      .catch((loadError) => setError(apiErrorMessage(loadError, "Unable to load settings.")));
   }, [token]);
 
   async function handleSave(setting: Setting) {
@@ -51,8 +52,8 @@ export function SettingsPage({ canEdit }: SettingsPageProps) {
         current.map((item) => (item.key === updated.key ? updated : item)),
       );
       setError(null);
-    } catch {
-      setError("Unable to update setting.");
+    } catch (saveError) {
+      setError(apiErrorMessage(saveError, "Unable to update setting."));
     }
   }
 
@@ -81,8 +82,13 @@ export function SettingsPage({ canEdit }: SettingsPageProps) {
       await changePassword(token, passwordDraft.currentPassword, passwordDraft.newPassword);
       setPasswordDraft({ currentPassword: "", newPassword: "", confirmPassword: "" });
       setAccountMessage("Password changed. Your current session remains active.");
-    } catch {
-      setAccountError("Unable to change password. Check your current password and password policy.");
+    } catch (passwordError) {
+      setAccountError(
+        apiErrorMessage(
+          passwordError,
+          "Unable to change password. Check your current password and password policy.",
+        ),
+      );
     } finally {
       setIsChangingPassword(false);
     }

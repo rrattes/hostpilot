@@ -8,6 +8,7 @@ import {
   type AgentJob,
   type AgentStatus,
 } from "../core/api/agent";
+import { apiErrorMessage } from "../core/api/client";
 import { useAuth } from "../core/auth/AuthProvider";
 
 interface AgentPageProps {
@@ -33,8 +34,8 @@ export function AgentPage({ canExecuteMock }: AgentPageProps) {
       setStatus(agentStatus);
       setJobs(recentJobs);
       setError(null);
-    } catch {
-      setError("Unable to load agent gateway.");
+    } catch (loadError) {
+      setError(apiErrorMessage(loadError, "Unable to load agent gateway."));
     }
   }
 
@@ -50,8 +51,8 @@ export function AgentPage({ canExecuteMock }: AgentPageProps) {
     try {
       await executeMockAgentAction(token, action);
       await loadAgent();
-    } catch {
-      setError("Unable to execute mock agent action.");
+    } catch (executeError) {
+      setError(apiErrorMessage(executeError, "Unable to execute mock agent action."));
     }
   }
 

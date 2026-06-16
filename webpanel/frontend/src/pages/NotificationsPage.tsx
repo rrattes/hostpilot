@@ -6,6 +6,7 @@ import {
   markNotificationRead,
   type NotificationItem,
 } from "../core/api/notifications";
+import { apiErrorMessage } from "../core/api/client";
 import { useAuth } from "../core/auth/AuthProvider";
 
 export function NotificationsPage() {
@@ -21,8 +22,8 @@ export function NotificationsPage() {
       setItems(response.items);
       setUnreadCount(response.unread_count);
       setError(null);
-    } catch {
-      setError("Unable to load notifications.");
+    } catch (loadError) {
+      setError(apiErrorMessage(loadError, "Unable to load notifications."));
     }
   }
 
@@ -32,14 +33,22 @@ export function NotificationsPage() {
 
   async function markRead(id: number) {
     if (!token) return;
-    await markNotificationRead(token, id);
-    await load();
+    try {
+      await markNotificationRead(token, id);
+      await load();
+    } catch (readError) {
+      setError(apiErrorMessage(readError, "Unable to mark notification as read."));
+    }
   }
 
   async function markAllRead() {
     if (!token) return;
-    await markAllNotificationsRead(token);
-    await load();
+    try {
+      await markAllNotificationsRead(token);
+      await load();
+    } catch (readError) {
+      setError(apiErrorMessage(readError, "Unable to mark notifications as read."));
+    }
   }
 
   return (

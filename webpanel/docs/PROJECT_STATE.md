@@ -112,6 +112,13 @@ Last updated: 2026-06-16
 - Web list/preview/readiness/plan/dry-run flows work locally.
 - Controlled Web apply is blocked locally when Agent state is `fallback`.
 - Browser smoke validation showed the Web page renders site rows and row Actions without console errors.
+- New Ubuntu lab deployment passed on `192.168.0.64`:
+  - Core, Agent, and Nginx services are active;
+  - Core health returns HTTP `200`;
+  - Agent health returns HTTP `200`;
+  - lab UI returns HTTP `200`;
+  - unauthenticated API proxy returns expected HTTP `401`;
+  - lab login API returns a bearer token for the bootstrapped lab admin.
 - Local test/build run on 2026-06-16:
   - backend pytest: `108 passed`;
   - Agent pytest: `27 passed`;
@@ -121,7 +128,7 @@ Last updated: 2026-06-16
 
 - v0.1 is a controlled lab/admin release, not a production installer.
 - Windows dev intentionally uses Agent fallback when the local Agent is unavailable; controlled Nginx actions require a real connected Agent.
-- Ubuntu lab SSH setup was completed on 2026-06-16 for `rattes@192.168.0.64` using `~/.ssh/hostpilot_lab`. HostPilot deployment validation still needs to be rerun on this disposable lab.
+- Ubuntu lab Core/Web/Agent deployment was completed on 2026-06-16 for `192.168.0.64`.
 - SSL automation is not implemented.
 - PHP-FPM install/config/management is not implemented.
 - Domain/DNS automation is not implemented.
@@ -152,6 +159,8 @@ Last updated: 2026-06-16
 - Lab UI remains `http://192.168.0.64:8080`.
 - Lab Core remains bound to `127.0.0.1:8000` on the lab.
 - Lab Agent remains bound to `127.0.0.1:8765` on the lab.
+- HostPilot Core, Agent, and Nginx are installed as systemd services on the lab.
+- Lab admin account was bootstrapped because the disposable lab database had no users.
 - Local SSH alias points to `rattes@192.168.0.64` with `~/.ssh/hostpilot_lab`.
 - Passwordless SSH via `ssh hostpilot-lab` works.
 - Lab OS is Ubuntu 26.04 LTS.

@@ -43,7 +43,10 @@ Remaining limitations are known and intentionally scoped out of v0.1. The most i
   - passwordless SSH through alias `hostpilot-lab` works with `~/.ssh/hostpilot_lab`;
   - OS is Ubuntu 26.04 LTS;
   - sudo access exists for `rattes`, with password prompt required;
-  - HostPilot deployment validation still needs to be rerun on this new disposable lab;
+  - HostPilot Core/Web/Agent deployment completed on the new disposable lab;
+  - Core, Agent, and Nginx services are active;
+  - Core health, Agent health, UI HTTP `200`, login API, and unauthenticated API proxy checks pass;
+  - full Web site apply/disable/reapply flow still needs a later lab workflow validation on this new host;
   - Previous controlled Nginx apply validation remains documented in `docs/deploy/ubuntu-lab-deploy.md`.
 
 ## Readiness Matrix

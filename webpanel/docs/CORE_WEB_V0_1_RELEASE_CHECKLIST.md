@@ -6,7 +6,7 @@ Scope: Core + Web only. This checklist intentionally excludes Docker, KVM, Remot
 
 ## Result
 
-Overall result: **Pass for controlled v0.1 lab/admin release, with Ubuntu lab rerun blocked by reachability.**
+Overall result: **Pass for controlled v0.1 lab/admin release, with new Ubuntu lab base deployment validated.**
 
 ## Local Validation
 
@@ -70,13 +70,13 @@ Overall result: **Pass for controlled v0.1 lab/admin release, with Ubuntu lab re
 | SSH alias validation | Pass | `ssh hostpilot-lab` logs in passwordlessly as `rattes`. |
 | OS/version | Pass | Ubuntu 26.04 LTS. |
 | Sudo/root access | Pass | `rattes` has sudo access; sudo requires an interactive password prompt. |
-| Deploy latest main | Not run | SSH setup only; deployment is a later validation task. |
-| Run migrations | Not run | SSH setup only; deployment is a later validation task. |
-| Restart Core/Agent/Nginx | Not run | SSH setup only; deployment is a later validation task. |
-| Core health on lab | Not run | HostPilot not validated on this new lab yet. |
-| Agent health on lab | Not run | HostPilot not validated on this new lab yet. |
-| UI HTTP 200 on lab | Not run | `http://192.168.0.64:8080` is not serving HostPilot yet. |
-| Login on lab | Not run | HostPilot not validated on this new lab yet. |
+| Deploy latest main | Pass | Clean `git archive` of current `HEAD` was deployed through the lab installer. |
+| Run migrations | Pass | Alembic ran through current head during installer. |
+| Restart Core/Agent/Nginx | Pass | `hostpilot-core.service`, `hostpilot-agent.service`, and `nginx.service` are active. |
+| Core health on lab | Pass | `http://127.0.0.1:8000/health` returned HTTP `200`. |
+| Agent health on lab | Pass | `http://127.0.0.1:8765/health` returned HTTP `200`. |
+| UI HTTP 200 on lab | Pass | `http://192.168.0.64:8080` returned HTTP `200` with HostPilot content. |
+| Login on lab | Pass | Lab admin was bootstrapped and `/api/core/auth/login` returned a bearer token. |
 | Web create/list on lab | Not run | HostPilot not validated on this new lab yet. |
 | Files/Logs on lab | Not run | HostPilot not validated on this new lab yet. |
 | Preview/plan/dry-run/preflight on lab | Not run | HostPilot not validated on this new lab yet. |

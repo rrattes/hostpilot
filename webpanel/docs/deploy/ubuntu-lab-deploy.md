@@ -396,3 +396,59 @@ Next lab validation should rerun:
 - validate Core health, Agent health, UI HTTP `200`, login, Web create/list,
   Files, Logs, Nginx preview, apply plan, dry-run, preflight, controlled apply,
   disable, re-apply, audit records, and job records.
+
+## 2026-06-16 New Lab Deployment Validation
+
+Validation target:
+
+- SSH alias: `hostpilot-lab`.
+- SSH user: `rattes`.
+- Lab IP: `192.168.0.64`.
+- Lab UI: `http://192.168.0.64:8080`.
+
+Deployment result:
+
+- Passwordless SSH to `hostpilot-lab` worked.
+- OS/version validation returned Ubuntu 26.04 LTS.
+- Sudo access exists for `rattes`; sudo prompts for the account password.
+- A clean `git archive` of the current `main` commit was copied to the lab and
+  extracted under `/tmp/hostpilot-src`.
+- The lab installer was run from the extracted project root.
+- The installer deployed HostPilot to `/opt/hostpilot/webpanel`.
+- Alembic migrations ran through current head.
+- Frontend production build completed on the lab.
+- Core, Agent, and Nginx systemd services were installed and restarted.
+
+Service status:
+
+- `hostpilot-core.service`: active.
+- `hostpilot-agent.service`: active.
+- `nginx.service`: active.
+- Core bound to `127.0.0.1:8000`.
+- Agent bound to `127.0.0.1:8765`.
+- Nginx exposed the lab UI on port `8080`.
+
+Validation commands and results:
+
+- Local backend pytest on Windows: `108 passed`.
+- Local Agent pytest on Windows: `27 passed`.
+- Local frontend build on Windows: passed.
+- Lab backend pytest: `108 passed` with pytest cache permission warnings only.
+- Lab Agent pytest: `27 passed` with pytest cache permission warnings only.
+- Lab check script: `10 passed, 0 failed`.
+- Core health: HTTP `200`.
+- Agent health: HTTP `200`.
+- Lab UI local: HTTP `200`.
+- Lab UI LAN `http://192.168.0.64:8080`: HTTP `200` with HostPilot content.
+- Unauthenticated API proxy check: HTTP `401`, expected for protected endpoint.
+- A lab admin account was bootstrapped because the disposable lab database had
+  no users.
+- Lab login API returned a bearer token for the bootstrapped admin.
+
+Not covered in this deployment validation:
+
+- Web site create/list on the lab.
+- Files/Logs on the lab.
+- Nginx preview, apply plan, dry-run, preflight, controlled apply, disable, and
+  re-apply on the lab.
+- Audit/job validation for Web controlled actions on the lab.

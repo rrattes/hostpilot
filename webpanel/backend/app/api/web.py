@@ -65,7 +65,6 @@ class WebSiteRead(BaseModel):
 
 class WebSiteCreate(BaseModel):
     domain: str = Field(min_length=1, max_length=255)
-    root_path: str = Field(min_length=1)
     php_runtime: str = Field(default="none", min_length=1, max_length=80)
     ssl_enabled: bool = False
 
@@ -462,7 +461,7 @@ def create_web_site(
     user: User = Depends(get_current_user),
 ) -> WebSiteRead:
     domain = _validate_domain(payload.domain)
-    root_path = _validate_root_path(payload.root_path, _allowed_base_path(db))
+    root_path = _derive_root_path(domain, _allowed_base_path(db))
     php_runtime = payload.php_runtime.strip()
     if not php_runtime:
         raise HTTPException(
@@ -1132,6 +1131,13 @@ def _allowed_base_path(db: Session) -> str:
     setting = db.scalar(select(Setting).where(Setting.key == "web.sites.allowed_base_path"))
     value = setting.value.strip() if setting is not None else DEFAULT_WEB_SITES_BASE_PATH
     return posixpath.normpath(value) if value else DEFAULT_WEB_SITES_BASE_PATH
+
+
+def _derive_root_path(domain: str, allowed_base_path: str) -> str:
+    return _validate_root_path(
+        posixpath.join(posixpath.normpath(allowed_base_path), domain),
+        allowed_base_path,
+    )
 
 
 def _validate_root_path(value: str, allowed_base_path: str) -> str:

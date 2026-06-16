@@ -153,7 +153,6 @@ def test_web_sites_registry_create_list_get_and_disable() -> None:
         headers={"Authorization": f"Bearer {token}"},
         json={
             "domain": "Example.COM",
-            "root_path": "/var/www/hostpilot-sites/example.com",
             "php_runtime": "php-8.3",
             "ssl_enabled": False,
         },
@@ -210,7 +209,6 @@ def test_web_sites_create_requires_manage_permission() -> None:
         headers={"Authorization": f"Bearer {token}"},
         json={
             "domain": "example.com",
-            "root_path": "/var/www/hostpilot-sites/example.com",
             "php_runtime": "none",
             "ssl_enabled": False,
         },
@@ -229,7 +227,6 @@ def test_web_sites_reject_invalid_domains() -> None:
             headers={"Authorization": f"Bearer {token}"},
             json={
                 "domain": domain,
-                "root_path": "/var/www/hostpilot-sites/example.com",
                 "php_runtime": "none",
                 "ssl_enabled": False,
             },
@@ -237,32 +234,42 @@ def test_web_sites_reject_invalid_domains() -> None:
         assert response.status_code == 422
 
 
-def test_web_sites_reject_invalid_root_paths() -> None:
+def test_web_sites_create_ignores_client_root_path_override() -> None:
     token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
     client = TestClient(app)
 
-    for root_path in [
-        "/",
-        "/etc",
-        "/bin",
-        "/usr",
-        "/var",
-        "/home",
-        "relative/path",
-        "/var/www/hostpilot-sites/../escape",
-        "/var/www/other/example.com",
-    ]:
-        response = client.post(
-            "/api/core/web/sites",
-            headers={"Authorization": f"Bearer {token}"},
-            json={
-                "domain": "example.com",
-                "root_path": root_path,
-                "php_runtime": "none",
-                "ssl_enabled": False,
-            },
-        )
-        assert response.status_code == 422
+    response = client.post(
+        "/api/core/web/sites",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": "override.example.com",
+            "root_path": "/etc",
+            "php_runtime": "none",
+            "ssl_enabled": False,
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["root_path"] == "/var/www/hostpilot-sites/override.example.com"
+
+
+def test_web_sites_create_uses_custom_allowed_base_path() -> None:
+    _set_allowed_base_path("/srv/hostpilot-sites")
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/core/web/sites",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": "custom-base.example.com",
+            "php_runtime": "none",
+            "ssl_enabled": False,
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["root_path"] == "/srv/hostpilot-sites/custom-base.example.com"
 
 
 def test_web_sites_prevent_duplicate_domains_on_create_and_update() -> None:
@@ -274,7 +281,6 @@ def test_web_sites_prevent_duplicate_domains_on_create_and_update() -> None:
         headers={"Authorization": f"Bearer {token}"},
         json={
             "domain": "first.example.com",
-            "root_path": "/var/www/hostpilot-sites/first.example.com",
             "php_runtime": "none",
             "ssl_enabled": False,
         },
@@ -284,7 +290,6 @@ def test_web_sites_prevent_duplicate_domains_on_create_and_update() -> None:
         headers={"Authorization": f"Bearer {token}"},
         json={
             "domain": "second.example.com",
-            "root_path": "/var/www/hostpilot-sites/second.example.com",
             "php_runtime": "none",
             "ssl_enabled": False,
         },
@@ -294,7 +299,6 @@ def test_web_sites_prevent_duplicate_domains_on_create_and_update() -> None:
         headers={"Authorization": f"Bearer {token}"},
         json={
             "domain": "FIRST.example.com",
-            "root_path": "/var/www/hostpilot-sites/duplicate.example.com",
             "php_runtime": "none",
             "ssl_enabled": False,
         },
@@ -325,7 +329,6 @@ def test_web_sites_update_validates_and_updates_record_only() -> None:
         headers={"Authorization": f"Bearer {token}"},
         json={
             "domain": "old.example.com",
-            "root_path": "/var/www/hostpilot-sites/old.example.com",
             "php_runtime": "none",
             "ssl_enabled": False,
         },

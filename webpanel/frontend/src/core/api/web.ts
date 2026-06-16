@@ -176,7 +176,6 @@ export function createWebSite(
   token: string,
   payload: {
     domain: string;
-    root_path: string;
     php_runtime: string;
     ssl_enabled: boolean;
   },

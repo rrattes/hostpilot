@@ -68,7 +68,6 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
   const [sites, setSites] = useState<WebSite[]>([]);
   const [readinessBySiteId, setReadinessBySiteId] = useState<Record<number, WebSiteReadiness>>({});
   const [domain, setDomain] = useState("");
-  const [rootPath, setRootPath] = useState("");
   const [phpRuntime, setPhpRuntime] = useState("none");
   const [sslEnabled, setSslEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -167,9 +166,8 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
   async function handleCreateSite() {
     if (!token || !canManageSites || isCreatingSite) return;
     const nextDomain = domain.trim();
-    const nextRootPath = rootPath.trim();
-    if (!nextDomain || !nextRootPath) {
-      setSiteError("Enter a domain and root path before adding a Web site record.");
+    if (!nextDomain) {
+      setSiteError("Enter a domain before adding a Web site record.");
       setSiteMessage(null);
       return;
     }
@@ -178,12 +176,10 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
       setIsCreatingSite(true);
       const created = await createWebSite(token, {
         domain: nextDomain,
-        root_path: nextRootPath,
         php_runtime: phpRuntime.trim() || "none",
         ssl_enabled: sslEnabled,
       });
       setDomain("");
-      setRootPath("");
       setPhpRuntime("none");
       setSslEnabled(false);
       setSiteError(null);
@@ -430,13 +426,11 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
   const blockedReadiness = sites.filter((site) => readinessBySiteId[site.id]?.ready === false).length;
   const logsAvailable = sectionBySlug.logs?.status === "available";
   const createDomain = domain.trim();
-  const createRootPath = rootPath.trim();
-  const canSubmitSiteRecord =
-    canManageSites && createDomain.length > 0 && createRootPath.length > 0 && !isCreatingSite;
+  const canSubmitSiteRecord = canManageSites && createDomain.length > 0 && !isCreatingSite;
   const createDisabledReason = !canManageSites
     ? "Requires the web.sites.manage permission."
-    : !createDomain || !createRootPath
-      ? "Enter a domain and root path first."
+    : !createDomain
+      ? "Enter a domain first."
       : undefined;
 
   return (
@@ -522,15 +516,6 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
                 />
               </label>
               <label>
-                <span>Root path</span>
-                <input
-                  disabled={isCreatingSite}
-                  onChange={(event) => setRootPath(event.target.value)}
-                  placeholder={`${defaultSitesBasePath}/example.com`}
-                  value={rootPath}
-                />
-              </label>
-              <label>
                 <span>PHP runtime</span>
                 <input
                   disabled={isCreatingSite}
@@ -560,8 +545,8 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
               </button>
             </div>
             <div className="web-validation-note">
-              Use a valid domain and a safe absolute root path under <code>{defaultSitesBasePath}</code>.
-              SSL/PHP are recorded as metadata only.
+              Sites are created under the configured HostPilot sites directory. Example:{" "}
+              <code>{defaultSitesBasePath}/teste.com.br</code>. SSL/PHP are metadata only.
             </div>
           </>
         ) : (

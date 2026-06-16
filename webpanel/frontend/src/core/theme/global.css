@@ -533,8 +533,12 @@ textarea {
 }
 
 .primary-button:disabled {
-  cursor: wait;
+  cursor: not-allowed;
   opacity: 0.72;
+}
+
+.primary-button.is-loading {
+  cursor: wait;
 }
 
 .primary-button.compact {

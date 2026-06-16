@@ -166,24 +166,29 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
 
   async function handleCreateSite() {
     if (!token || !canManageSites || isCreatingSite) return;
+    const nextDomain = domain.trim();
+    const nextRootPath = rootPath.trim();
+    if (!nextDomain || !nextRootPath) {
+      setSiteError("Enter a domain and root path before adding a Web site record.");
+      setSiteMessage(null);
+      return;
+    }
 
     try {
       setIsCreatingSite(true);
       const created = await createWebSite(token, {
-        domain,
-        root_path: rootPath,
-        php_runtime: phpRuntime,
+        domain: nextDomain,
+        root_path: nextRootPath,
+        php_runtime: phpRuntime.trim() || "none",
         ssl_enabled: sslEnabled,
       });
-      setSites((current) => [...current, created].sort((a, b) => a.domain.localeCompare(b.domain)));
-      const readiness = await getWebSiteReadiness(token, created.id);
-      setReadinessBySiteId((current) => ({ ...current, [created.id]: readiness }));
       setDomain("");
       setRootPath("");
       setPhpRuntime("none");
       setSslEnabled(false);
       setSiteError(null);
       setSiteMessage(`${created.domain} recorded as config pending. No files or services were changed.`);
+      await loadSites();
     } catch (createError) {
       setSiteError(apiErrorMessage(createError, "Unable to create Web site record."));
       setSiteMessage(null);
@@ -424,6 +429,15 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
   const readySites = sites.filter((site) => site.provisioning_status === "ready_to_apply").length;
   const blockedReadiness = sites.filter((site) => readinessBySiteId[site.id]?.ready === false).length;
   const logsAvailable = sectionBySlug.logs?.status === "available";
+  const createDomain = domain.trim();
+  const createRootPath = rootPath.trim();
+  const canSubmitSiteRecord =
+    canManageSites && createDomain.length > 0 && createRootPath.length > 0 && !isCreatingSite;
+  const createDisabledReason = !canManageSites
+    ? "Requires the web.sites.manage permission."
+    : !createDomain || !createRootPath
+      ? "Enter a domain and root path first."
+      : undefined;
 
   return (
     <section className="data-page web-page" aria-label="Web module">
@@ -534,9 +548,11 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
                 <span>SSL flag only</span>
               </label>
               <button
-                className="primary-button compact"
-                disabled={isCreatingSite || !domain.trim() || !rootPath.trim()}
+                aria-busy={isCreatingSite}
+                className={`primary-button compact ${isCreatingSite ? "is-loading" : ""}`}
+                disabled={!canSubmitSiteRecord}
                 onClick={handleCreateSite}
+                title={createDisabledReason}
                 type="button"
               >
                 <Plus size={16} />

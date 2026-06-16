@@ -14,3 +14,10 @@ export function changePassword(token: string, currentPassword: string, newPasswo
     },
   });
 }
+
+export function logoutSession(token: string) {
+  return apiRequest<MessageResponse>("/api/core/auth/logout", {
+    method: "POST",
+    token,
+  });
+}

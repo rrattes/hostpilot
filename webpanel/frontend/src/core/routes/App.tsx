@@ -156,7 +156,7 @@ function AppRoutes() {
       modules={modules}
       notifications={notifications}
       onLogout={() => {
-        logout();
+        void logout();
         window.history.replaceState(null, "", "/login");
         setPath("/login");
       }}

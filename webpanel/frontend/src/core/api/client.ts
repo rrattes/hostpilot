@@ -39,6 +39,9 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   if (!response.ok) {
     const fallback = response.status === 401 ? "Invalid credentials." : "Request failed.";
     const message = await readErrorMessage(response, fallback);
+    if (response.status === 401 && options.token && typeof window !== "undefined") {
+      window.dispatchEvent(new Event("hostpilot:auth-expired"));
+    }
     throw new ApiError(message, response.status);
   }
 

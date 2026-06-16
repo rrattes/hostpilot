@@ -45,7 +45,7 @@ Overall classification: **Needs fix before v0.1**.
 
 | Area | Classification | Evidence | Notes |
 | --- | --- | --- | --- |
-| Login/auth/session | Needs fix before v0.1 | `backend/app/api/auth.py:63`, `backend/app/api/auth.py:161`; `frontend/src/core/auth/AuthProvider.tsx:26`, `frontend/src/core/auth/AuthProvider.tsx:85` | Password login, rate limit, JWT expiry, and sessionStorage work. Missing refresh/session revocation and frontend logout does not call backend logout endpoint. Acceptable for lab, but needs explicit v0.1 decision. |
+| Login/auth/session | Ready | `backend/app/api/auth.py:63`, `backend/app/api/auth.py:161`; `frontend/src/core/auth/AuthProvider.tsx:26`, `frontend/src/core/auth/AuthProvider.tsx:91`; `frontend/src/core/api/client.ts:35` | v0.1 uses simple stateless 60-minute bearer tokens in `sessionStorage`. Frontend logout clears token/user/permissions immediately and calls the backend logout audit endpoint when possible. Expired/invalid authenticated API calls clear local session state and redirect to login. |
 | Password policy | Ready | `backend/app/core/auth/security.py:65` | Enforces length, lower/upper/digit/punctuation. |
 | Login rate limiting | Ready | `backend/app/core/auth/rate_limit.py:11`; `backend/app/api/auth.py:66` | In-memory limiter exists. For multi-process production, later centralization would be nice. |
 | Admin bootstrap | Needs fix before v0.1 | `backend/app/scripts/bootstrap_admin.py:15`, `backend/app/scripts/bootstrap_admin.py:47` | Works, but reruns update password. Needs first-run docs/guardrail. |
@@ -99,14 +99,21 @@ Overall classification: **Needs fix before v0.1**.
 7. **Refresh Ubuntu lab validation docs for the current Web feature set.**  
    Include apply, disable, reapply, files, logs, audit/job records, created paths, and rollback expectations.
 
-8. **Decide session scope for v0.1.**  
-   Either accept 60-minute access tokens with sessionStorage as v0.1 scope, or add refresh/revoke behavior. Document the decision.
-
-9. **Add small admin safety guards.**  
+8. **Add small admin safety guards.**
    Prevent accidental self-deactivation/role lockout or at least show strong confirmation in the UI.
 
-10. **Label backup scope in product copy and docs.**  
+9. **Label backup scope in product copy and docs.**
     Make clear that Core backups are Core DB/config archives only, with no restore, scheduler, website, Nginx, SSL, or remote storage support in v0.1.
+
+## Auth/Session Scope
+
+v0.1 decision: **keep a simple 60-minute stateless JWT session.**
+
+- The backend issues bearer access tokens from `POST /api/core/auth/login`; the default expiry is 60 minutes and remains configurable through the existing access-token settings.
+- The frontend stores the token in `sessionStorage`, so a browser/tab session is intentionally short-lived and does not persist like `localStorage`.
+- Logout is client-authoritative for v0.1: the UI clears token, current user, and permission state immediately. When a valid token is still available, it also calls `POST /api/core/auth/logout` so the backend can record the audit event.
+- Expired or invalid tokens are handled by clearing local auth state and returning the user to the login screen.
+- v0.1 does not include refresh tokens, server-side token revocation, SSO, MFA, or long-lived remember-me sessions. A copied token remains cryptographically usable until it expires, so operators should treat bearer tokens as sensitive.
 
 ## v0.1 Decision
 

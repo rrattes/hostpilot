@@ -1,5 +1,6 @@
-import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
+import { logoutSession } from "../api/auth";
 import { apiRequest } from "../api/client";
 import type { CurrentAccess, CurrentUser, LoginResponse } from "./types";
 
@@ -13,7 +14,7 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -28,12 +29,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [permissions, setPermissions] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const clearSession = useCallback(() => {
+    sessionStorage.removeItem(TOKEN_KEY);
+    setToken(null);
+    setCurrentUser(null);
+    setPermissions([]);
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("hostpilot:auth-expired", clearSession);
+    return () => window.removeEventListener("hostpilot:auth-expired", clearSession);
+  }, [clearSession]);
+
   useEffect(() => {
     let isMounted = true;
 
     async function loadCurrentUser() {
       if (!token) {
         setCurrentUser(null);
+        setPermissions([]);
         setIsLoading(false);
         return;
       }
@@ -48,11 +62,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setPermissions(access.permissions);
         }
       } catch {
-        sessionStorage.removeItem(TOKEN_KEY);
         if (isMounted) {
-          setToken(null);
-          setCurrentUser(null);
-          setPermissions([]);
+          clearSession();
         }
       } finally {
         if (isMounted) {
@@ -85,14 +96,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
         sessionStorage.setItem(TOKEN_KEY, response.access_token);
         setToken(response.access_token);
       },
-      logout: () => {
-        sessionStorage.removeItem(TOKEN_KEY);
-        setToken(null);
-        setCurrentUser(null);
-        setPermissions([]);
+      logout: async () => {
+        const activeToken = token;
+        clearSession();
+        if (!activeToken) return;
+        try {
+          await logoutSession(activeToken);
+        } catch {
+          // Client state is already cleared; logout remains best-effort for stateless JWT audit.
+        }
       },
     }),
-    [currentUser, isLoading, permissions],
+    [clearSession, currentUser, isLoading, permissions, token],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

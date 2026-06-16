@@ -184,3 +184,113 @@ def test_create_user_rejects_weak_password() -> None:
 
     assert response.status_code == 400
     assert "Password must be at least 12 characters." in response.json()["detail"]
+
+
+def test_self_deactivation_is_blocked() -> None:
+    _seed_admin()
+    client = TestClient(app)
+
+    with TestingSessionLocal() as db:
+        admin = db.scalar(select(User).where(User.email == "admin@example.com"))
+        assert admin is not None
+        admin_role = db.scalar(select(Role).where(Role.slug == "admin"))
+        assert admin_role is not None
+        second_admin = User(
+            email="second-admin@example.com",
+            display_name="Second Admin",
+            password_hash=hash_password("AdminPassword123!"),
+            roles=[admin_role],
+            is_active=True,
+            is_superuser=True,
+        )
+        db.add(second_admin)
+        db.commit()
+        admin_id = admin.id
+        token = create_access_token(admin.id)
+
+    response = client.patch(
+        f"/api/core/admin/users/{admin_id}/active",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"is_active": False},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "You cannot deactivate your own admin account."
+
+    with TestingSessionLocal() as db:
+        admin = db.get(User, admin_id)
+        assert admin is not None
+        assert admin.is_active is True
+
+
+def test_last_admin_deactivation_is_blocked() -> None:
+    token = _seed_admin()
+    client = TestClient(app)
+
+    with TestingSessionLocal() as db:
+        admin = db.scalar(select(User).where(User.email == "admin@example.com"))
+        assert admin is not None
+        admin_id = admin.id
+
+    response = client.patch(
+        f"/api/core/admin/users/{admin_id}/active",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"is_active": False},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Cannot deactivate the last active admin account."
+
+    with TestingSessionLocal() as db:
+        admin = db.get(User, admin_id)
+        assert admin is not None
+        assert admin.is_active is True
+
+
+def test_self_admin_role_removal_is_blocked() -> None:
+    token = _seed_admin()
+    client = TestClient(app)
+
+    with TestingSessionLocal() as db:
+        admin = db.scalar(select(User).where(User.email == "admin@example.com"))
+        assert admin is not None
+        admin_id = admin.id
+
+    response = client.patch(
+        f"/api/core/admin/users/{admin_id}/roles",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"role_slugs": ["viewer"]},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "You cannot remove your own admin access."
+
+
+def test_safe_admin_role_change_still_works_when_another_admin_remains() -> None:
+    token = _seed_admin()
+    client = TestClient(app)
+
+    with TestingSessionLocal() as db:
+        admin_role = db.scalar(select(Role).where(Role.slug == "admin"))
+        assert admin_role is not None
+        second_admin = User(
+            email="second-admin@example.com",
+            display_name="Second Admin",
+            password_hash=hash_password("AdminPassword123!"),
+            roles=[admin_role],
+            is_active=True,
+            is_superuser=True,
+        )
+        db.add(second_admin)
+        db.commit()
+        db.refresh(second_admin)
+        second_admin_id = second_admin.id
+
+    response = client.patch(
+        f"/api/core/admin/users/{second_admin_id}/roles",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"role_slugs": ["viewer"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["roles"] == ["viewer"]

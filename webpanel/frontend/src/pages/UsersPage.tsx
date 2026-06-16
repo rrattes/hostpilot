@@ -17,7 +17,7 @@ import { useAuth } from "../core/auth/AuthProvider";
 const DEFAULT_ROLE = "viewer";
 
 export function UsersPage() {
-  const { token } = useAuth();
+  const { currentUser, token } = useAuth();
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [roles, setRoles] = useState<RoleItem[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +76,12 @@ export function UsersPage() {
 
   async function handleActiveChange(user: ManagedUser, isActive: boolean) {
     if (!token) return;
+    if (!isActive) {
+      const action = user.id === currentUser?.id
+        ? "This would deactivate your own admin account and may lock you out. Continue?"
+        : `Disable ${user.email}? Make sure another active admin account remains available.`;
+      if (!window.confirm(action)) return;
+    }
     try {
       const updated = await updateUserActiveStatus(token, user.id, isActive);
       updateUserInList(updated);
@@ -89,6 +95,13 @@ export function UsersPage() {
 
   async function handleRoleChange(user: ManagedUser, roleSlug: string) {
     if (!token) return;
+    if (user.id === currentUser?.id && user.roles.includes("admin") && roleSlug !== "admin") {
+      if (!window.confirm("This would remove your own admin access. Continue?")) return;
+    } else if (user.roles.includes("admin") && roleSlug !== "admin") {
+      if (!window.confirm(`Remove admin access from ${user.email}? Make sure another active admin remains available.`)) {
+        return;
+      }
+    }
     try {
       const updated = await updateUserRoles(token, user.id, roleSlug ? [roleSlug] : []);
       updateUserInList(updated);

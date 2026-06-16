@@ -145,6 +145,8 @@ def update_user_active_status(
     actor: User = Depends(require_permission("core.admin")),
 ) -> UserRead:
     user = _get_user_or_404(db, user_id)
+    if not payload.is_active:
+        _ensure_user_can_be_disabled(db, user, actor)
     previous_value = user.is_active
     user.is_active = payload.is_active
     record_audit_event(
@@ -170,7 +172,9 @@ def update_user_roles(
 ) -> UserRead:
     user = _get_user_or_404(db, user_id)
     previous_roles = sorted(role.slug for role in user.roles)
-    user.roles = _roles_for_slugs(db, payload.role_slugs)
+    next_roles = _roles_for_slugs(db, payload.role_slugs)
+    _ensure_roles_can_change(db, user, actor, next_roles)
+    user.roles = next_roles
     record_audit_event(
         db,
         action="users.roles.updated",
@@ -232,6 +236,52 @@ def _roles_for_slugs(db: Session, role_slugs: list[str]) -> list[Role]:
             detail=f"Unknown roles: {', '.join(missing_slugs)}",
         )
     return list(roles)
+
+
+def _ensure_user_can_be_disabled(db: Session, user: User, actor: User) -> None:
+    if _user_has_permission(user, "core.admin") and _active_admin_count(db) <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot deactivate the last active admin account.",
+        )
+    if user.id == actor.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot deactivate your own admin account.",
+        )
+
+
+def _ensure_roles_can_change(db: Session, user: User, actor: User, next_roles: list[Role]) -> None:
+    had_admin_access = _user_has_permission(user, "core.admin")
+    will_have_admin_access = _roles_have_permission(next_roles, "core.admin")
+    if had_admin_access and not will_have_admin_access:
+        if user.id == actor.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You cannot remove your own admin access.",
+            )
+        if user.is_active and _active_admin_count(db) <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot remove admin access from the last active admin account.",
+            )
+
+
+def _active_admin_count(db: Session) -> int:
+    users = db.scalars(
+        select(User)
+        .options(selectinload(User.roles).selectinload(Role.permissions))
+        .where(User.is_active.is_(True))
+    ).unique().all()
+    return sum(1 for user in users if _user_has_permission(user, "core.admin"))
+
+
+def _user_has_permission(user: User, permission_slug: str) -> bool:
+    return _roles_have_permission(list(user.roles), permission_slug)
+
+
+def _roles_have_permission(roles: list[Role], permission_slug: str) -> bool:
+    return any(permission.slug == permission_slug for role in roles for permission in role.permissions)
 
 
 def _user_read(user: User) -> UserRead:

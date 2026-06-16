@@ -1,13 +1,13 @@
 # HostPilot Project State
 
-Last updated: 2026-06-12
+Last updated: 2026-06-16
 
 ## Workspace
 
 - Official workspace: `C:\Users\Admin\OneDrive\Documentos\HostPilot_RECOVERY_CLEAN\webpanel`
 - Legacy workspace to avoid: `C:\Users\Admin\OneDrive\Documentos\WebManager\webpanel`
 - Current branch at time of this state update: `main`
-- Current pre-state commit: `e7dbc57f96c786d221c967861e6b75cd45c71948`
+- Current pre-state commit: `151d318135969eb194b5b5f112e7cd8d17629e8f`
 - Local services:
   - Frontend: `http://127.0.0.1:5173`
   - Backend: `http://127.0.0.1:8000`
@@ -25,75 +25,114 @@ Last updated: 2026-06-12
 - Do not delete/recreate/reset local DB or admin password unless explicitly instructed.
 - Do not touch the legacy workspace.
 
-## Implemented Modules And Features
+## Implemented Core Features
 
-- Core platform shell:
-  - Authentication and admin users/roles.
-  - RBAC permission checks.
-  - Module registry.
+- Authentication with simple stateless bearer JWT sessions.
+- Frontend token storage in `sessionStorage`.
+- Backend logout audit endpoint plus client-side logout state clearing.
+- RBAC permission enforcement for Core and Web APIs.
+- Admin users and roles visibility.
+- Admin safety guards:
+  - self-deactivation blocked;
+  - last active admin deactivation blocked;
+  - removing own admin access blocked;
+  - removing admin access from the last active admin blocked.
+- Non-destructive admin bootstrap:
+  - creates an admin when missing;
+  - does not reset an existing admin password by default;
+  - requires `--reset-password` for intentional reset.
+- Module registry, settings, audit log, jobs, notifications, and Core backup archive records.
+- Dev/mock-only UI actions are hidden unless explicit development mode is enabled.
+- API error normalization supports FastAPI string, object, list, and validation-array detail formats.
+- Agent gateway reports explicit availability states:
+  - `connected`;
+  - `fallback`;
+  - `unavailable`.
+
+## Implemented Web Features
+
+- Web module route and sidebar entry.
+- Web site registry model and API.
+- Web site create/list/get/update/record-disable workflows.
+- Web site create derives `root_path` from:
+  - `web.sites.allowed_base_path`;
+  - sanitized validated domain.
+- User-controlled root path is not accepted during create.
+- Domain validation, duplicate prevention, and root path safety checks.
+- Readiness workflow:
+  - `draft`;
+  - `config_previewed`;
+  - `ready_to_apply`;
+  - `disabled`;
+  - `error`.
+- Nginx config preview, apply plan, and dry-run are read-only/planning flows.
+- Controlled Nginx apply, disable, and re-apply use allowlisted Agent actions.
+- Web Agent preflight blocks controlled actions unless a real connected Agent is available and required checks pass.
+- Read-only site log viewer.
+- Read-only site file browser:
+  - lists metadata only;
+  - loads the site root automatically on open;
+  - stays within the site root;
+  - prevents traversal and root-boundary escape;
+  - distinguishes loading, empty directory, missing directory, and errors.
+- Web UI is simplified around summary cards plus the Sites table.
+- Site row Actions menu exposes:
+  - Files;
+  - Logs;
+  - Preview;
+  - Mark Ready;
+  - Plan / Dry-run / Apply;
+  - Disable record;
+  - Disable site;
+  - Re-Apply.
+
+## Latest UI And Dashboard Changes
+
+- Home page is a focused `Overview` dashboard instead of a crowded registry grid.
+- Sidebar uses grouped navigation:
+  - Overview;
+  - Infrastructure;
+  - Operations;
+  - Modules;
+  - Web;
   - Settings.
-  - Audit events.
-  - Jobs.
-  - Notifications.
-  - Core backup records.
-  - Mock/local Agent gateway.
-- Dashboard/UI:
-  - Modern `Overview` landing page.
-  - Grouped sidebar navigation.
-  - Sidebar visual standardization with consistent icons, hover, active, and focus states.
-  - Summary cards, system activity chart, jobs donut, recent activity list, and compact modules snapshot.
-- Web module:
-  - Web module page and sidebar route.
-  - Web site registry model/API.
-  - Site create/list/get/record-disable.
-  - Domain and safe root path validation.
-  - Readiness workflow and statuses.
-  - Nginx config preview.
-  - Nginx apply plan preview.
-  - Dry-run apply.
-  - Controlled Nginx apply via Agent.
-  - Controlled disable and re-apply flows.
-  - Read-only site log viewer.
-  - Read-only site file browser.
-  - File browser now loads the site root automatically when opened.
+- Quick Actions live lower in the sidebar.
+- Sidebar active, hover, icon, and status-card styling are aligned.
+- Web module labels now reflect implemented workflows instead of scaffold/coming-soon copy.
 
 ## Known Working Items
 
 - Backend health endpoint responds at `/health`.
 - Frontend dev server responds at `/`.
-- Frontend proxy reaches backend; unauthenticated core status returns expected `401`.
+- Frontend proxy reaches backend.
 - Admin login works in the current local development database.
-- Web site row actions are visible after site records exist.
-- Web file browser opens from a site row and automatically starts loading the site root.
-- When the local Agent is unavailable, Web file/log actions show clear errors rather than hanging.
-- Frontend build has passed after the latest UI/sidebar changes.
-- Backend pytest previously passed after the latest backend Web file-browser/API changes.
+- Current local admin has `web.sites.view` and `web.sites.manage`.
+- Web record creation works on Windows without Agent or Nginx.
+- Web site root path is auto-derived from the configured HostPilot sites directory.
+- Web list/preview/readiness/plan/dry-run flows work locally.
+- Controlled Web apply is blocked locally when Agent state is `fallback`.
+- Browser smoke validation showed the Web page renders site rows and row Actions without console errors.
+- Local test/build run on 2026-06-16:
+  - backend pytest: `108 passed`;
+  - Agent pytest: `27 passed`;
+  - frontend build: passed.
 
-## Known Broken Or Pending Items
+## Known Limits For v0.1
 
-- Local Agent is not currently running in normal Windows dev flow, so Agent-backed Web actions may return dev fallback errors until the Agent is started.
-- Web file/log viewers are read-only and depend on Agent availability for real filesystem/log data.
+- v0.1 is a controlled lab/admin release, not a production installer.
+- Windows dev intentionally uses Agent fallback when the local Agent is unavailable; controlled Nginx actions require a real connected Agent.
+- Ubuntu lab validation could not be rerun from this workstation on 2026-06-16 because `192.168.122.7:8080` timed out and SSH alias `hostpilot-lab` was refused.
 - SSL automation is not implemented.
 - PHP-FPM install/config/management is not implemented.
 - Domain/DNS automation is not implemented.
-- Upload/edit/delete/download in the file browser are intentionally not implemented.
+- File upload/edit/delete/download are intentionally not implemented.
 - Live log streaming is not implemented.
-- Real Nginx validation should continue to be done on the Ubuntu lab, not on Windows.
-
-## Current Web Module Status
-
-- Web module is active in the UI.
-- Site registry stores records only until controlled apply is requested.
-- Nginx preview/plan/dry-run are preview/simulation flows unless controlled Agent apply is explicitly confirmed.
-- Controlled apply/disable/reapply are allowlisted Agent actions, not arbitrary shell execution.
-- File browser:
-  - Lists metadata only.
-  - Stays within the site `root_path`.
-  - Prevents traversal/root-boundary escape.
-  - Shows distinct states for loading, empty directory, missing site root, and errors.
-- Logs viewer:
-  - Reads only HostPilot-managed access/error log paths.
-  - Enforces max line limits.
+- Core backups are basic Core archive records; restore, scheduling, remote storage, and website/Nginx backup scope are not included.
+- Auth/session scope is intentionally simple:
+  - 60-minute stateless JWT by default;
+  - no refresh tokens;
+  - no server-side revocation list;
+  - no SSO or MFA.
 
 ## Login And Admin Notes
 
@@ -106,25 +145,10 @@ Last updated: 2026-06-12
 - Re-running bootstrap for an existing admin is non-destructive by default and does not change the password.
 - To intentionally rotate an existing admin password, run bootstrap with `--reset-password`.
 
-## Latest UI And Dashboard Changes
+## Lab Notes
 
-- Home page was redesigned from crowded registry-style cards into a focused `Overview`.
-- Sidebar was reorganized into grouped sections:
-  - Overview
-  - Infrastructure
-  - Operations
-  - Modules
-  - Settings
-- Quick Actions were added lower in the sidebar:
-  - Run Audit
-  - View Logs
-  - Create Backup
-  - New Job
-- Sidebar icons/colors were standardized so main sections and menu items match the Quick Actions visual language.
-- Active sidebar item uses stronger cyan/blue accent.
-- Inactive sidebar items remain softer but readable.
-
-## GitHub Save Notes
-
-- This state file is intended to document the current local project state before pushing accumulated commits to GitHub.
-- Product code should not be changed as part of this state snapshot.
+- Ubuntu lab SSH alias remains `hostpilot-lab`.
+- Lab IP reference is `192.168.122.7`.
+- Lab UI remains `http://192.168.122.7:8080`.
+- Lab Core remains bound to `127.0.0.1:8000` on the lab.
+- Lab Agent remains bound to `127.0.0.1:8765` on the lab.

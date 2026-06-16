@@ -359,3 +359,32 @@ Validation commands passed locally and on the lab host:
   arbitrary commands.
 - Python 3.14 support remains intentionally deferred. The supported Ubuntu 26.04
   lab runtime is isolated Python 3.13 under `/opt/hostpilot/python`.
+
+## 2026-06-16 v0.1 Reachability Check
+
+Validation target:
+
+- SSH alias: `hostpilot-lab`.
+- Lab IP: `192.168.122.7`.
+- Lab UI: `http://192.168.122.7:8080`.
+
+Result:
+
+- Local Core health at `http://127.0.0.1:8000/health` returned HTTP `200`.
+- Local frontend at `http://127.0.0.1:5173/` returned HTTP `200`.
+- Lab UI request to `http://192.168.122.7:8080` timed out from the Windows
+  development workstation.
+- SSH alias `hostpilot-lab` refused connection during connection setup.
+
+The latest v0.1 Ubuntu lab deployment and controlled Web flow were not rerun
+because the lab host was not reachable from this workstation. The last completed
+controlled Nginx apply validation remains the 2026-06-11 validation above.
+
+Next lab validation should rerun:
+
+- deploy latest `main` to `/opt/hostpilot`;
+- run migrations;
+- restart Core, Agent, and Nginx;
+- validate Core health, Agent health, UI HTTP `200`, login, Web create/list,
+  Files, Logs, Nginx preview, apply plan, dry-run, preflight, controlled apply,
+  disable, re-apply, audit records, and job records.

@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.agent_gateway.service import execute_mock_agent_action
+from app.core.agent_gateway.service import execute_mock_agent_action, get_agent_status
 from app.core.audit.events import record_audit_event
 from app.core.auth.dependencies import get_current_user
 from app.core.rbac.permissions import require_permission
@@ -23,6 +23,9 @@ SectionStatus = Literal["available", "unavailable", "coming_soon"]
 ProvisioningStatus = Literal["draft", "config_previewed", "ready_to_apply", "disabled", "error"]
 DEFAULT_WEB_SITES_BASE_PATH = "/var/www/hostpilot-sites"
 DEFAULT_WEB_LOG_BASE_PATH = "/var/log/nginx/hostpilot"
+HOSTPILOT_NGINX_CONFIG_BASE_PATH = "/etc/nginx/sites-available/hostpilot"
+NGINX_VALIDATION_COMMAND = "nginx -t"
+NGINX_RELOAD_COMMAND = "systemctl reload nginx"
 MAX_WEB_LOG_LINES = 500
 MAX_WEB_FILE_PAGE_SIZE = 100
 DANGEROUS_ROOT_PATHS = {"/", "/bin", "/etc", "/home", "/usr", "/var"}
@@ -94,6 +97,30 @@ class WebSiteReadinessRead(BaseModel):
     provisioning_status: ProvisioningStatus
     ready: bool
     checks: list[WebSiteReadinessCheck]
+
+
+class WebSitePreflightCheck(BaseModel):
+    slug: str
+    label: str
+    passed: bool
+    detail: str
+
+
+class WebSitePreflightRead(BaseModel):
+    site_id: int
+    domain: str
+    ready: bool
+    agent_status: str
+    agent_mode: str
+    using_real_agent: bool
+    using_fallback: bool
+    required_agent_actions: list[str]
+    allowed_agent_actions: list[str]
+    allowed_web_base_path: str
+    nginx_config_base_path: str
+    nginx_validation_command: str
+    reload_command: str
+    checks: list[WebSitePreflightCheck]
 
 
 class WebSiteNginxApplyPlanRead(BaseModel):
@@ -686,6 +713,16 @@ def get_web_site_nginx_apply_plan(
     return plan
 
 
+@router.get(
+    "/web/sites/{site_id}/preflight",
+    response_model=WebSitePreflightRead,
+    dependencies=[Depends(require_permission("web.sites.view"))],
+)
+def get_web_site_preflight(site_id: int, db: Session = Depends(get_db)) -> WebSitePreflightRead:
+    site = _site_or_404(db, site_id)
+    return _web_site_preflight(db, site)
+
+
 @router.post(
     "/web/sites/{site_id}/nginx-dry-run",
     response_model=WebSiteDryRunRead,
@@ -769,6 +806,7 @@ def apply_web_site_nginx_config(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Confirmation phrase does not match.",
         )
+    _require_web_site_preflight(db, site, ["web.nginx.apply_site_config"])
 
     agent_payload = _agent_apply_payload(site, allowed_base_path)
     record_audit_event(
@@ -838,6 +876,7 @@ def disable_web_site_nginx_config(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Confirmation phrase does not match.",
         )
+    _require_web_site_preflight(db, site, ["web.nginx.disable_site_config"])
 
     agent_payload = _agent_disable_payload(site)
     record_audit_event(
@@ -915,6 +954,7 @@ def reapply_web_site_nginx_config(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Confirmation phrase does not match.",
         )
+    _require_web_site_preflight(db, site, ["web.nginx.apply_site_config"])
 
     agent_payload = _agent_apply_payload(site, _allowed_base_path(db))
     record_audit_event(
@@ -1175,7 +1215,7 @@ server {{
 
 def _nginx_apply_plan(site: WebSite, allowed_webroot_base: str = DEFAULT_WEB_SITES_BASE_PATH) -> WebSiteNginxApplyPlanRead:
     config_filename = f"{site.domain}.conf"
-    target_config_path = f"/etc/nginx/sites-available/hostpilot/{config_filename}"
+    target_config_path = f"{HOSTPILOT_NGINX_CONFIG_BASE_PATH}/{config_filename}"
     allowed_base = posixpath.normpath(allowed_webroot_base)
     return WebSiteNginxApplyPlanRead(
         site_id=site.id,
@@ -1186,17 +1226,17 @@ def _nginx_apply_plan(site: WebSite, allowed_webroot_base: str = DEFAULT_WEB_SIT
             allowed_base,
             site.root_path,
             "/etc/nginx/sites-available",
-            "/etc/nginx/sites-available/hostpilot",
+            HOSTPILOT_NGINX_CONFIG_BASE_PATH,
             "/etc/nginx/sites-enabled",
             "/var/log/nginx/hostpilot",
         ],
         config_filename=config_filename,
         validation_commands=[
-            "nginx -t",
+            NGINX_VALIDATION_COMMAND,
             f"test -f {target_config_path}",
             f"test -d {site.root_path}",
         ],
-        service_reload_command="systemctl reload nginx",
+        service_reload_command=NGINX_RELOAD_COMMAND,
         risk_level="medium",
         confirmation_phrase=f"APPLY NGINX PLAN {site.domain}",
         plan_only=True,
@@ -1220,6 +1260,131 @@ def _nginx_dry_run(site: WebSite, allowed_webroot_base: str = DEFAULT_WEB_SITES_
     )
 
 
+def _web_site_preflight(
+    db: Session,
+    site: WebSite,
+    required_actions: list[str] | None = None,
+) -> WebSitePreflightRead:
+    required_agent_actions = required_actions or [
+        "web.nginx.apply_site_config",
+        "web.nginx.disable_site_config",
+    ]
+    allowed_web_base_path = _allowed_base_path(db)
+    plan = _nginx_apply_plan(site, allowed_web_base_path)
+    agent_status = get_agent_status()
+    allowed_agent_actions = [str(action) for action in agent_status.get("allowed_actions", [])]
+    is_connected = agent_status.get("status") == "connected" and bool(agent_status.get("using_real_agent"))
+    target_under_nginx_base = (
+        plan.target_config_path == HOSTPILOT_NGINX_CONFIG_BASE_PATH
+        or plan.target_config_path.startswith(f"{HOSTPILOT_NGINX_CONFIG_BASE_PATH}/")
+    )
+
+    checks = [
+        _preflight_check(
+            "agent_reachable",
+            "Agent reachable",
+            is_connected,
+            "Local Agent is connected." if is_connected else str(agent_status.get("message", "Local Agent is not connected.")),
+        ),
+        _preflight_check(
+            "agent_real_connected",
+            "Agent state is connected",
+            agent_status.get("status") == "connected" and not bool(agent_status.get("using_fallback")),
+            f"Agent state is {agent_status.get('status')} ({agent_status.get('mode')}).",
+        ),
+        _preflight_check(
+            "required_actions_allowlisted",
+            "Required Agent actions allowlisted",
+            all(action in allowed_agent_actions for action in required_agent_actions),
+            f"Required: {', '.join(required_agent_actions)}.",
+        ),
+        _preflight_check(
+            "allowed_web_base_path",
+            "Configured Web allowed base path",
+            bool(allowed_web_base_path.startswith("/")),
+            f"Webroot base: {allowed_web_base_path}.",
+        ),
+        _preflight_check(
+            "site_root_inside_allowed_base",
+            "Site root inside allowed base",
+            _path_inside(site.root_path, allowed_web_base_path),
+            f"Site root: {site.root_path}.",
+        ),
+        _preflight_check(
+            "nginx_config_base_path",
+            "Nginx config base path",
+            bool(HOSTPILOT_NGINX_CONFIG_BASE_PATH.startswith("/")),
+            f"Nginx config base: {HOSTPILOT_NGINX_CONFIG_BASE_PATH}.",
+        ),
+        _preflight_check(
+            "target_config_inside_nginx_base",
+            "Target config under HostPilot Nginx path",
+            target_under_nginx_base,
+            f"Target config: {plan.target_config_path}.",
+        ),
+        _preflight_check(
+            "nginx_command_declared",
+            "Nginx validation command",
+            plan.validation_commands[0] == NGINX_VALIDATION_COMMAND,
+            f"Command that will run later: {plan.validation_commands[0]}.",
+        ),
+        _preflight_check(
+            "reload_command_declared",
+            "Reload command",
+            plan.service_reload_command == NGINX_RELOAD_COMMAND,
+            f"Command that will run later: {plan.service_reload_command}.",
+        ),
+        _preflight_check(
+            "write_path_assumptions",
+            "Write path assumptions",
+            _path_inside(site.root_path, allowed_web_base_path) and target_under_nginx_base,
+            "Apply is constrained to the configured webroot base and HostPilot Nginx config path.",
+        ),
+    ]
+
+    return WebSitePreflightRead(
+        site_id=site.id,
+        domain=site.domain,
+        ready=all(check.passed for check in checks),
+        agent_status=str(agent_status.get("status", "unavailable")),
+        agent_mode=str(agent_status.get("mode", "unknown")),
+        using_real_agent=bool(agent_status.get("using_real_agent")),
+        using_fallback=bool(agent_status.get("using_fallback")),
+        required_agent_actions=required_agent_actions,
+        allowed_agent_actions=allowed_agent_actions,
+        allowed_web_base_path=allowed_web_base_path,
+        nginx_config_base_path=HOSTPILOT_NGINX_CONFIG_BASE_PATH,
+        nginx_validation_command=NGINX_VALIDATION_COMMAND,
+        reload_command=NGINX_RELOAD_COMMAND,
+        checks=checks,
+    )
+
+
+def _require_web_site_preflight(
+    db: Session,
+    site: WebSite,
+    required_actions: list[str],
+) -> WebSitePreflightRead:
+    preflight = _web_site_preflight(db, site, required_actions)
+    if not preflight.ready:
+        failed = [check.label for check in preflight.checks if not check.passed]
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Web Agent preflight failed: {', '.join(failed)}.",
+        )
+    return preflight
+
+
+def _preflight_check(slug: str, label: str, passed: bool, detail: str) -> WebSitePreflightCheck:
+    return WebSitePreflightCheck(slug=slug, label=label, passed=passed, detail=detail)
+
+
+def _path_inside(path: str, base: str) -> bool:
+    normalized_path = posixpath.normpath(path)
+    normalized_base = posixpath.normpath(base)
+    return normalized_path == normalized_base or normalized_path.startswith(f"{normalized_base}/")
+
+
 def _agent_apply_payload(site: WebSite, allowed_webroot_base: str) -> dict[str, object]:
     plan = _nginx_apply_plan(site, allowed_webroot_base)
     return {
@@ -1228,7 +1393,7 @@ def _agent_apply_payload(site: WebSite, allowed_webroot_base: str) -> dict[str, 
         "target_config_path": plan.target_config_path,
         "config_content": _nginx_preview(site),
         "allowed_webroot_base": posixpath.normpath(allowed_webroot_base),
-        "allowed_nginx_base": "/etc/nginx/sites-available/hostpilot",
+        "allowed_nginx_base": HOSTPILOT_NGINX_CONFIG_BASE_PATH,
     }
 
 
@@ -1237,7 +1402,7 @@ def _agent_disable_payload(site: WebSite) -> dict[str, object]:
     return {
         "domain": site.domain,
         "target_config_path": plan.target_config_path,
-        "allowed_nginx_base": "/etc/nginx/sites-available/hostpilot",
+        "allowed_nginx_base": HOSTPILOT_NGINX_CONFIG_BASE_PATH,
     }
 
 

@@ -60,6 +60,30 @@ export interface WebSiteReadiness {
   checks: WebSiteReadinessCheck[];
 }
 
+export interface WebSitePreflightCheck {
+  slug: string;
+  label: string;
+  passed: boolean;
+  detail: string;
+}
+
+export interface WebSitePreflight {
+  site_id: number;
+  domain: string;
+  ready: boolean;
+  agent_status: string;
+  agent_mode: string;
+  using_real_agent: boolean;
+  using_fallback: boolean;
+  required_agent_actions: string[];
+  allowed_agent_actions: string[];
+  allowed_web_base_path: string;
+  nginx_config_base_path: string;
+  nginx_validation_command: string;
+  reload_command: string;
+  checks: WebSitePreflightCheck[];
+}
+
 export interface WebSiteNginxApplyPlan {
   site_id: number;
   domain: string;
@@ -209,6 +233,12 @@ export function markWebSiteReadyToApply(token: string, siteId: number) {
 
 export function getWebSiteNginxApplyPlan(token: string, siteId: number) {
   return apiRequest<WebSiteNginxApplyPlan>(`/api/core/web/sites/${siteId}/nginx-apply-plan`, {
+    token,
+  });
+}
+
+export function getWebSitePreflight(token: string, siteId: number) {
+  return apiRequest<WebSitePreflight>(`/api/core/web/sites/${siteId}/preflight`, {
     token,
   });
 }

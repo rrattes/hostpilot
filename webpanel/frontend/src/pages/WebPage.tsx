@@ -24,6 +24,7 @@ import {
   getWebSiteFiles,
   getWebSiteLogs,
   getWebSiteReadiness,
+  getWebSitePreflight,
   getWebStatus,
   listWebSites,
   markWebSiteReadyToApply,
@@ -41,6 +42,7 @@ import {
   type WebSiteLogFile,
   type WebSiteLogs,
   type WebSiteNginxApplyPlan,
+  type WebSitePreflight,
   type WebSiteNginxPreview,
   type WebSiteReadiness,
   type WebSiteReapplyResult,
@@ -81,6 +83,7 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
   const [isCreatingSite, setIsCreatingSite] = useState(false);
   const [nginxPreview, setNginxPreview] = useState<WebSiteNginxPreview | null>(null);
   const [applyPlan, setApplyPlan] = useState<WebSiteNginxApplyPlan | null>(null);
+  const [preflight, setPreflight] = useState<WebSitePreflight | null>(null);
   const [dryRunPhrase, setDryRunPhrase] = useState("");
   const [dryRunResult, setDryRunResult] = useState<WebSiteDryRunResult | null>(null);
   const [applyPhrase, setApplyPhrase] = useState("");
@@ -245,7 +248,13 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
     if (!token || !canViewSites) return;
 
     try {
-      setApplyPlan(await getWebSiteNginxApplyPlan(token, siteId));
+      setPreflight(null);
+      const [plan, preflightResult] = await Promise.all([
+        getWebSiteNginxApplyPlan(token, siteId),
+        getWebSitePreflight(token, siteId),
+      ]);
+      setApplyPlan(plan);
+      setPreflight(preflightResult);
       setDryRunPhrase("");
       setDryRunResult(null);
       setApplyPhrase("");
@@ -254,6 +263,7 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
     } catch (planError) {
       setSiteError(apiErrorMessage(planError, "Unable to generate Nginx apply plan."));
       setApplyPlan(null);
+      setPreflight(null);
     }
   }
 
@@ -316,6 +326,8 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
     setDisablePhrase("");
     setDisableResult(null);
     setSiteError(null);
+    setPreflight(null);
+    void loadPreflight(site.id);
   }
 
   async function handleReapplyNginxConfig() {
@@ -344,6 +356,20 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
     setReapplyPhrase("");
     setReapplyResult(null);
     setSiteError(null);
+    setPreflight(null);
+    void loadPreflight(site.id);
+  }
+
+  async function loadPreflight(siteId: number) {
+    if (!token || !canViewSites) return;
+
+    try {
+      setPreflight(await getWebSitePreflight(token, siteId));
+      setSiteError(null);
+    } catch (preflightError) {
+      setPreflight(null);
+      setSiteError(apiErrorMessage(preflightError, "Unable to load Web Agent preflight."));
+    }
   }
 
   async function handleViewLogs(site: WebSite) {
@@ -773,6 +799,7 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
                 HostPilot Nginx config, run nginx -t, and reload Nginx only if validation passes.
               </span>
             </div>
+            {preflight ? <PreflightPanel preflight={preflight} /> : null}
             {!realAgentAvailable ? (
               <div className="web-apply-warning">
                 <strong>Agent not connected</strong>
@@ -792,6 +819,7 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
               disabled={
                 !canManageSites ||
                 !realAgentAvailable ||
+                !preflight?.ready ||
                 applyPhrase !== applyPlan.confirmation_phrase
               }
               onClick={handleApplyNginxConfig}
@@ -806,6 +834,7 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
                 className="icon-text-button"
                 onClick={() => {
                   setApplyPlan(null);
+                  setPreflight(null);
                   setDryRunPhrase("");
                   setDryRunResult(null);
                   setApplyPhrase("");
@@ -836,6 +865,7 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
               <strong>Required confirmation</strong>
               <span>{disableConfirmationPhrase(disableTarget)}</span>
             </div>
+            {preflight ? <PreflightPanel preflight={preflight} /> : null}
             {!realAgentAvailable ? (
               <div className="web-apply-warning">
                 <strong>Agent not connected</strong>
@@ -855,6 +885,7 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
               disabled={
                 !canManageSites ||
                 !realAgentAvailable ||
+                !preflight?.ready ||
                 disablePhrase !== disableConfirmationPhrase(disableTarget)
               }
               onClick={handleDisableNginxConfig}
@@ -869,6 +900,7 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
                 className="icon-text-button"
                 onClick={() => {
                   setDisableTarget(null);
+                  setPreflight(null);
                   setDisablePhrase("");
                   setDisableResult(null);
                 }}
@@ -897,6 +929,7 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
               <strong>Required confirmation</strong>
               <span>{applyConfirmationPhrase(reapplyTarget)}</span>
             </div>
+            {preflight ? <PreflightPanel preflight={preflight} /> : null}
             {!realAgentAvailable ? (
               <div className="web-apply-warning">
                 <strong>Agent not connected</strong>
@@ -916,6 +949,7 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
               disabled={
                 !canManageSites ||
                 !realAgentAvailable ||
+                !preflight?.ready ||
                 reapplyPhrase !== applyConfirmationPhrase(reapplyTarget)
               }
               onClick={handleReapplyNginxConfig}
@@ -930,6 +964,7 @@ export function WebPage({ agentStatus, canManageSites, canViewSites, moduleState
                 className="icon-text-button"
                 onClick={() => {
                   setReapplyTarget(null);
+                  setPreflight(null);
                   setReapplyPhrase("");
                   setReapplyResult(null);
                 }}
@@ -1294,6 +1329,38 @@ function ReadinessChecklist({ readiness }: { readiness?: WebSiteReadiness }) {
           {check.label}
         </span>
       ))}
+    </div>
+  );
+}
+
+function PreflightPanel({ preflight }: { preflight: WebSitePreflight }) {
+  return (
+    <div className="apply-plan-section">
+      <strong>Web Agent preflight</strong>
+      <span className={`state-pill ${preflight.ready ? "state-active" : "state-disabled"}`}>
+        {preflight.ready ? "Passed" : "Blocked"}
+      </span>
+      <code className="path-code">
+        Agent {preflight.agent_status} / {preflight.agent_mode}
+      </code>
+      <code className="path-code">Webroot base: {preflight.allowed_web_base_path}</code>
+      <code className="path-code">Nginx config base: {preflight.nginx_config_base_path}</code>
+      <div className="readiness-list">
+        {preflight.checks.map((check) => (
+          <span
+            className={`readiness-check ${check.passed ? "passed" : "failed"}`}
+            key={check.slug}
+            title={check.detail}
+          >
+            {check.label}
+          </span>
+        ))}
+      </div>
+      {!preflight.ready ? (
+        <span className="empty-table-note">
+          Controlled Apply, Disable, and Re-Apply are blocked until preflight passes.
+        </span>
+      ) : null}
     </div>
   );
 }

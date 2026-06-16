@@ -68,6 +68,44 @@ def _token_with_permissions(permission_slugs: list[str]) -> str:
         return create_access_token(user.id)
 
 
+def _connected_agent_status(actions: list[str] | None = None) -> dict[str, object]:
+    return {
+        "status": "connected",
+        "mode": "local-http",
+        "allowed_actions": actions
+        or ["web.nginx.apply_site_config", "web.nginx.disable_site_config"],
+        "using_real_agent": True,
+        "using_fallback": False,
+        "fallback_enabled": False,
+        "web_actions_use_real_agent": True,
+        "dev_actions_enabled": False,
+        "message": "Local Agent is connected.",
+    }
+
+
+def _fallback_agent_status() -> dict[str, object]:
+    return {
+        **_connected_agent_status(),
+        "status": "fallback",
+        "mode": "mock-fallback",
+        "using_real_agent": False,
+        "using_fallback": True,
+        "web_actions_use_real_agent": False,
+        "message": "Local Agent is unavailable; Windows/dev mock fallback is active.",
+    }
+
+
+def _unavailable_agent_status() -> dict[str, object]:
+    return {
+        **_connected_agent_status(),
+        "status": "unavailable",
+        "mode": "local-http",
+        "using_real_agent": False,
+        "web_actions_use_real_agent": False,
+        "message": "Local Agent is unavailable and fallback is disabled.",
+    }
+
+
 def test_web_status_exposes_available_site_workflows() -> None:
     token = _token_with_permissions(["web.view"])
     client = TestClient(app)
@@ -576,6 +614,141 @@ def test_nginx_apply_plan_is_preview_only_and_audited() -> None:
     assert audit_event.target_id == str(created["id"])
 
 
+def test_web_agent_preflight_passes_when_agent_connected(monkeypatch) -> None:
+    monkeypatch.setattr("app.api.web.get_agent_status", _connected_agent_status)
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = client.post(
+        "/api/core/web/sites",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": "preflight.example.com",
+            "root_path": "/var/www/hostpilot-sites/preflight.example.com",
+            "php_runtime": "php-8.3",
+            "ssl_enabled": False,
+        },
+    ).json()
+
+    response = client.get(
+        f"/api/core/web/sites/{created['id']}/preflight",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    checks = {check["slug"]: check["passed"] for check in payload["checks"]}
+    assert payload["ready"] is True
+    assert payload["agent_status"] == "connected"
+    assert payload["using_real_agent"] is True
+    assert payload["allowed_web_base_path"] == "/var/www/hostpilot-sites"
+    assert payload["nginx_config_base_path"] == "/etc/nginx/sites-available/hostpilot"
+    assert checks["agent_reachable"] is True
+    assert checks["required_actions_allowlisted"] is True
+    assert checks["nginx_command_declared"] is True
+    assert checks["reload_command_declared"] is True
+
+
+def test_web_agent_preflight_fails_when_required_action_missing(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "app.api.web.get_agent_status",
+        lambda: _connected_agent_status(["web.nginx.apply_site_config"]),
+    )
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = client.post(
+        "/api/core/web/sites",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": "preflight-actions.example.com",
+            "root_path": "/var/www/hostpilot-sites/preflight-actions.example.com",
+            "php_runtime": "php-8.3",
+            "ssl_enabled": False,
+        },
+    ).json()
+
+    response = client.get(
+        f"/api/core/web/sites/{created['id']}/preflight",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    checks = {check["slug"]: check["passed"] for check in response.json()["checks"]}
+    assert response.status_code == 200
+    assert response.json()["ready"] is False
+    assert checks["required_actions_allowlisted"] is False
+
+
+def test_web_agent_preflight_fails_for_fallback_agent(monkeypatch) -> None:
+    monkeypatch.setattr("app.api.web.get_agent_status", _fallback_agent_status)
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = client.post(
+        "/api/core/web/sites",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": "preflight-fallback.example.com",
+            "root_path": "/var/www/hostpilot-sites/preflight-fallback.example.com",
+            "php_runtime": "php-8.3",
+            "ssl_enabled": False,
+        },
+    ).json()
+
+    response = client.get(
+        f"/api/core/web/sites/{created['id']}/preflight",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    checks = {check["slug"]: check["passed"] for check in response.json()["checks"]}
+    assert response.status_code == 200
+    assert response.json()["ready"] is False
+    assert response.json()["agent_status"] == "fallback"
+    assert response.json()["using_fallback"] is True
+    assert checks["agent_reachable"] is False
+    assert checks["agent_real_connected"] is False
+
+
+def test_controlled_nginx_apply_blocked_when_preflight_fails(monkeypatch) -> None:
+    monkeypatch.setattr("app.api.web.get_agent_status", _fallback_agent_status)
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = _ready_site(client, token, "preflight-block.example.com")
+
+    response = client.post(
+        f"/api/core/web/sites/{created['id']}/nginx-apply",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"confirmation_phrase": "APPLY NGINX PLAN preflight-block.example.com"},
+    )
+
+    assert response.status_code == 409
+    assert "Web Agent preflight failed" in response.json()["detail"]
+
+
+def test_web_agent_preflight_fails_for_unavailable_agent(monkeypatch) -> None:
+    monkeypatch.setattr("app.api.web.get_agent_status", _unavailable_agent_status)
+    token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
+    client = TestClient(app)
+    created = client.post(
+        "/api/core/web/sites",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "domain": "preflight-unavailable.example.com",
+            "root_path": "/var/www/hostpilot-sites/preflight-unavailable.example.com",
+            "php_runtime": "php-8.3",
+            "ssl_enabled": False,
+        },
+    ).json()
+
+    response = client.get(
+        f"/api/core/web/sites/{created['id']}/preflight",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    checks = {check["slug"]: check["passed"] for check in response.json()["checks"]}
+    assert response.status_code == 200
+    assert response.json()["ready"] is False
+    assert response.json()["agent_status"] == "unavailable"
+    assert checks["agent_reachable"] is False
+
+
 def test_nginx_dry_run_requires_ready_to_apply_status() -> None:
     token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
     client = TestClient(app)
@@ -721,9 +894,10 @@ def test_controlled_nginx_apply_calls_agent_and_updates_site(monkeypatch) -> Non
             data={"applied": True, "reloaded": True},
             error=None,
             duration_ms=3,
-        )
+    )
 
     monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    monkeypatch.setattr("app.api.web.get_agent_status", _connected_agent_status)
     token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
     client = TestClient(app)
     created = _ready_site(client, token, "apply-agent.example.com")
@@ -771,9 +945,10 @@ def test_controlled_nginx_apply_uses_configured_allowed_base_path(monkeypatch) -
             data={"applied": True, "reloaded": True},
             error=None,
             duration_ms=3,
-        )
+    )
 
     monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    monkeypatch.setattr("app.api.web.get_agent_status", _connected_agent_status)
     _set_allowed_base_path("/srv/hostpilot-sites")
     token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
     client = TestClient(app)
@@ -823,9 +998,10 @@ def test_controlled_nginx_apply_marks_error_on_agent_failure(monkeypatch) -> Non
             data={"rolled_back": True, "reloaded": False},
             error="validation_failed",
             duration_ms=4,
-        )
+    )
 
     monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    monkeypatch.setattr("app.api.web.get_agent_status", _connected_agent_status)
     token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
     client = TestClient(app)
     created = _ready_site(client, token, "apply-fail.example.com")
@@ -907,9 +1083,10 @@ def test_controlled_nginx_disable_calls_agent_and_updates_site(monkeypatch) -> N
             data={"disabled": True, "reloaded": True},
             error=None,
             duration_ms=3,
-        )
+    )
 
     monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    monkeypatch.setattr("app.api.web.get_agent_status", _connected_agent_status)
     token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
     client = TestClient(app)
     created = _applied_site(client, token, "disable-agent.example.com")
@@ -970,9 +1147,10 @@ def test_controlled_nginx_disable_marks_error_on_validation_failure(monkeypatch)
             data={"rolled_back": True, "reloaded": False},
             error="validation_failed",
             duration_ms=4,
-        )
+    )
 
     monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    monkeypatch.setattr("app.api.web.get_agent_status", _connected_agent_status)
     token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
     client = TestClient(app)
     created = _applied_site(client, token, "disable-fail.example.com")
@@ -1063,9 +1241,10 @@ def test_controlled_nginx_reapply_calls_apply_agent_and_updates_site(monkeypatch
             data={"applied": True, "reloaded": True},
             error=None,
             duration_ms=3,
-        )
+    )
 
     monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    monkeypatch.setattr("app.api.web.get_agent_status", _connected_agent_status)
     token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
     client = TestClient(app)
     created = _disabled_site(client, token, "reapply-agent.example.com")
@@ -1175,9 +1354,10 @@ def test_controlled_nginx_reapply_marks_error_on_apply_failure(monkeypatch) -> N
             data={"rolled_back": True, "reloaded": False},
             error="validation_failed",
             duration_ms=4,
-        )
+    )
 
     monkeypatch.setattr("app.api.web.execute_mock_agent_action", fake_execute_agent_action)
+    monkeypatch.setattr("app.api.web.get_agent_status", _connected_agent_status)
     token = _token_with_permissions(["web.sites.view", "web.sites.manage"])
     client = TestClient(app)
     created = _error_site(client, token, "reapply-fail.example.com")

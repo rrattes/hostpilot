@@ -452,3 +452,83 @@ Not covered in this deployment validation:
 - Nginx preview, apply plan, dry-run, preflight, controlled apply, disable, and
   re-apply on the lab.
 - Audit/job validation for Web controlled actions on the lab.
+
+## 2026-06-17 Web v0.1 Flow Validation
+
+Validation target:
+
+- SSH alias: `hostpilot-lab`.
+- SSH user: `rattes`.
+- Lab IP: `192.168.0.64`.
+- Lab UI: `http://192.168.0.64:8080`.
+- Install path: `/opt/hostpilot/webpanel`.
+
+Validated Web site:
+
+- Domain: `lab-test.local`.
+- Derived webroot: `/var/www/hostpilot-sites/lab-test.local`.
+- Managed Nginx config:
+  `/etc/nginx/sites-available/hostpilot/lab-test.local.conf`.
+
+Validation flow result:
+
+- Logged in through the lab API using the bootstrapped lab admin.
+- Opened the Web route through the lab UI.
+- Created the `lab-test.local` Web site record.
+- Confirmed `root_path` was auto-derived as
+  `/var/www/hostpilot-sites/lab-test.local`; no user-entered root path was
+  sent.
+- Confirmed the site appeared in the Web site list.
+- Confirmed row actions are available for the site workflow: Files, Logs,
+  Nginx preview, plan/dry-run/apply, disable, and re-apply.
+- Opened the read-only Files endpoint for the site.
+- Opened the read-only Logs endpoint for the site.
+- Generated the Nginx config preview.
+- Marked the site ready and generated the apply plan.
+- Ran the dry-run with the typed confirmation phrase; no files or commands were
+  executed by the dry-run.
+- Ran preflight and confirmed Agent state was `connected` with real Agent usage.
+- Ran controlled apply through the Agent.
+- Confirmed the Agent apply job ran `nginx -t` with return code `0`.
+- Confirmed the Agent apply job ran `systemctl reload nginx` with return code
+  `0`.
+- Confirmed the site status became `applied`.
+- Ran controlled disable through the Agent.
+- Ran controlled re-apply through the Agent.
+- Confirmed the final site status is `applied`.
+- Confirmed job records exist for apply, disable, and re-apply.
+- Confirmed audit events exist for Web and Agent actions.
+
+Path and service validation:
+
+- Managed config exists only at
+  `/etc/nginx/sites-available/hostpilot/lab-test.local.conf`.
+- No `lab-test.local.conf` file was found elsewhere under `/etc/nginx`.
+- Webroot exists at `/var/www/hostpilot-sites/lab-test.local`.
+- Privileged `nginx -t` returned success.
+- `hostpilot-core.service`: active.
+- `hostpilot-agent.service`: active.
+- `nginx.service`: active.
+- Core health: HTTP `200`.
+- Agent health: HTTP `200`.
+- Lab UI: HTTP `200`.
+- Unauthenticated API proxy check: HTTP `401`, expected for protected
+  endpoints.
+
+Validation commands and results:
+
+- Local backend pytest on Windows: `108 passed`.
+- Local Agent pytest on Windows: `27 passed`.
+- Local frontend build on Windows: passed.
+- Lab apply job id: `3`.
+- Lab disable job id: `4`.
+- Lab re-apply job id: `5`.
+- Web/Agent audit records found: `25`.
+
+Notes:
+
+- An initial manual validation command attempted `nginx -t` as the unprivileged
+  `rattes` user and failed on `/run/nginx.pid` permissions. This was a manual
+  validation-command issue; the Agent-controlled apply/disable/re-apply jobs ran
+  `nginx -t` successfully as part of the controlled workflow.
+- No product code changes were required.

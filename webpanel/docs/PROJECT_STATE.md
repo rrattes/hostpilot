@@ -119,6 +119,13 @@ Last updated: 2026-06-16
   - lab UI returns HTTP `200`;
   - unauthenticated API proxy returns expected HTTP `401`;
   - lab login API returns a bearer token for the bootstrapped lab admin.
+- New Ubuntu lab Web v0.1 flow passed for `lab-test.local`:
+  - site record created with auto-derived root path;
+  - Files and Logs opened read-only;
+  - Nginx preview, apply plan, dry-run, and preflight passed;
+  - controlled apply, disable, and re-apply completed through the Agent;
+  - `nginx -t` and Nginx reload succeeded in Agent job results;
+  - audit and job records exist.
 - Local test/build run on 2026-06-16:
   - backend pytest: `108 passed`;
   - Agent pytest: `27 passed`;
@@ -161,6 +168,7 @@ Last updated: 2026-06-16
 - Lab Agent remains bound to `127.0.0.1:8765` on the lab.
 - HostPilot Core, Agent, and Nginx are installed as systemd services on the lab.
 - Lab admin account was bootstrapped because the disposable lab database had no users.
+- Lab test site `lab-test.local` was applied through controlled Web flow.
 - Local SSH alias points to `rattes@192.168.0.64` with `~/.ssh/hostpilot_lab`.
 - Passwordless SSH via `ssh hostpilot-lab` works.
 - Lab OS is Ubuntu 26.04 LTS.

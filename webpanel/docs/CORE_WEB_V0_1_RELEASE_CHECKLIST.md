@@ -77,11 +77,11 @@ Overall result: **Pass for controlled v0.1 lab/admin release, with new Ubuntu la
 | Agent health on lab | Pass | `http://127.0.0.1:8765/health` returned HTTP `200`. |
 | UI HTTP 200 on lab | Pass | `http://192.168.0.64:8080` returned HTTP `200` with HostPilot content. |
 | Login on lab | Pass | Lab admin was bootstrapped and `/api/core/auth/login` returned a bearer token. |
-| Web create/list on lab | Not run | HostPilot not validated on this new lab yet. |
-| Files/Logs on lab | Not run | HostPilot not validated on this new lab yet. |
-| Preview/plan/dry-run/preflight on lab | Not run | HostPilot not validated on this new lab yet. |
-| Controlled apply/disable/reapply on lab | Not run | HostPilot not validated on this new lab yet. |
-| Audit/job records on lab | Not run | HostPilot not validated on this new lab yet. |
+| Web create/list on lab | Pass | Created `lab-test.local`; root path was auto-derived and the site appeared in the list. |
+| Files/Logs on lab | Pass | Read-only Files and Logs endpoints opened for the site. |
+| Preview/plan/dry-run/preflight on lab | Pass | Preview, readiness, apply plan, dry-run, and connected-Agent preflight all passed. |
+| Controlled apply/disable/reapply on lab | Pass | Apply job `3`, disable job `4`, and re-apply job `5` completed successfully. |
+| Audit/job records on lab | Pass | Apply/disable/re-apply job records and Web/Agent audit records exist. |
 
 Previous controlled Nginx apply validation on the Ubuntu lab is documented in `docs/deploy/ubuntu-lab-deploy.md`.
 
@@ -91,5 +91,5 @@ Proceed with Core + Web v0.1 as a controlled lab/admin release after acknowledgi
 
 - controlled Nginx actions must only be used when Web preflight passes with Agent state `connected`;
 - Windows development is valid for records, preview, readiness, plan, and dry-run, but not real Nginx apply;
-- the latest Ubuntu lab validation must be rerun before claiming current-lab validation for this exact commit;
+- the new Ubuntu lab Web v0.1 flow has been validated for this exact commit;
 - documented limitations remain out of scope for v0.1.

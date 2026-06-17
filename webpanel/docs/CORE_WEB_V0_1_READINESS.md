@@ -46,8 +46,10 @@ Remaining limitations are known and intentionally scoped out of v0.1. The most i
   - HostPilot Core/Web/Agent deployment completed on the new disposable lab;
   - Core, Agent, and Nginx services are active;
   - Core health, Agent health, UI HTTP `200`, login API, and unauthenticated API proxy checks pass;
-  - full Web site apply/disable/reapply flow still needs a later lab workflow validation on this new host;
-  - Previous controlled Nginx apply validation remains documented in `docs/deploy/ubuntu-lab-deploy.md`.
+  - full Web v0.1 flow passed for `lab-test.local`, including create/list,
+    Files, Logs, preview, plan, dry-run, preflight, controlled apply, disable,
+    re-apply, `nginx -t`, Nginx reload, audit records, and job records;
+  - detailed validation is documented in `docs/deploy/ubuntu-lab-deploy.md`.
 
 ## Readiness Matrix
 
@@ -117,7 +119,7 @@ v0.1 decision: **keep a simple 60-minute stateless JWT session.**
 ## Remaining Limitations
 
 - v0.1 is not a production deployment story.
-- Ubuntu lab validation for the latest commit still needs to be rerun once `hostpilot-lab` is reachable.
+- The new Ubuntu lab is validated for the Core/Web v0.1 flow, but it remains a disposable test host.
 - SSL automation is not implemented.
 - PHP-FPM installation/configuration/management is not implemented.
 - Domain/DNS automation is not implemented.
@@ -129,9 +131,8 @@ v0.1 decision: **keep a simple 60-minute stateless JWT session.**
 
 ## Ordered Fix Plan After v0.1
 
-1. Rerun the full Ubuntu lab validation for the latest `main` once `192.168.0.64` is reachable.
-2. Add a production deployment hardening plan separate from the lab installer.
-3. Expand Core backup scope with restore, scheduling, and remote storage decisions.
-4. Add SSL automation only after the Nginx controlled apply/rollback model is stable.
-5. Add PHP-FPM runtime management only after defining OS/package boundaries.
-6. Add role-definition editing only if v0.1 operators need custom roles.
+1. Add a production deployment hardening plan separate from the lab installer.
+2. Expand Core backup scope with restore, scheduling, and remote storage decisions.
+3. Add SSL automation only after the Nginx controlled apply/rollback model is stable.
+4. Add PHP-FPM runtime management only after defining OS/package boundaries.
+5. Add role-definition editing only if v0.1 operators need custom roles.

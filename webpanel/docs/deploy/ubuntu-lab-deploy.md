@@ -549,3 +549,72 @@ Final v0.1 validation result: passed for controlled Ubuntu lab use.
 This validation confirms the controlled lab workflow only. It does not make the
 release production-hardened and does not add SSL automation, PHP-FPM management,
 application profiles, file write operations, or additional modules.
+
+## 2026-06-17 Simple HTML Site Publishing Validation
+
+Validation target:
+
+- SSH alias: `hostpilot-lab`.
+- Lab IP: `192.168.0.64`.
+- Lab UI: `http://192.168.0.64:8080`.
+- Site domain: `simple-html.local`.
+- Expected webroot: `/var/www/hostpilot-sites/simple-html.local`.
+
+Deployment state:
+
+- Latest runtime deployment was already sufficient for this validation; the
+  local commits since the previous lab deployment were documentation-only.
+- `hostpilot-core.service`: active.
+- `hostpilot-agent.service`: active.
+- `nginx.service`: active.
+- Core health returned HTTP `200`.
+- Agent health returned HTTP `200`.
+- Lab UI returned HTTP `200`.
+
+HostPilot Web workflow:
+
+- Authenticated to the lab API using a temporary validation admin account.
+- Created the Web site record for `simple-html.local`.
+- Confirmed `root_path` was auto-derived as
+  `/var/www/hostpilot-sites/simple-html.local`.
+- Generated Nginx preview.
+- Generated apply plan.
+- Ran dry-run; no files, directories, commands, or services were changed by the
+  dry-run.
+- Ran preflight; Agent state was `connected` and preflight was ready.
+- Ran controlled apply through the Agent.
+- Agent apply job id: `7`.
+- Agent apply validation ran `nginx -t` with return code `0`.
+- Agent apply reload ran `systemctl reload nginx` with return code `0`.
+
+Published content:
+
+- Created `/var/www/hostpilot-sites/simple-html.local/index.html` after the
+  controlled apply.
+- File content:
+  `<h1>HostPilot simple HTML site OK</h1>`.
+- Managed Nginx config path:
+  `/etc/nginx/sites-available/hostpilot/simple-html.local.conf`.
+- A follow-up privileged `nginx -t` returned success.
+
+HTTP validation:
+
+- Lab-local check passed:
+  `curl -H "Host: simple-html.local" http://127.0.0.1/`.
+- LAN check passed:
+  `curl -H "Host: simple-html.local" http://192.168.0.64/`.
+- Both responses contained:
+  `HostPilot simple HTML site OK`.
+- Browser validation without DNS or a hosts-file entry cannot send the required
+  `Host` header directly, so the temporary LAN validation method was `curl` with
+  the `Host: simple-html.local` header.
+
+Files and logs validation:
+
+- HostPilot Files endpoint listed `index.html` metadata for the site root.
+- HostPilot Logs endpoint showed access log entries after the curl requests.
+
+Cleanup:
+
+- Temporary validation admin accounts created for this check were deactivated.
+- No product code changes were required.

@@ -126,6 +126,12 @@ Last updated: 2026-06-17
   - controlled apply, disable, and re-apply completed through the Agent;
   - `nginx -t` and Nginx reload succeeded in Agent job results;
   - audit and job records exist.
+- New Ubuntu lab simple HTML publishing validation passed for `simple-html.local`:
+  - site record created with auto-derived root path;
+  - controlled preview, plan, dry-run, preflight, and apply passed;
+  - `/var/www/hostpilot-sites/simple-html.local/index.html` served through Nginx;
+  - Files listed `index.html` metadata;
+  - Logs showed access entries after curl requests.
 - Local test/build run on 2026-06-16:
   - backend pytest: `108 passed`;
   - Agent pytest: `27 passed`;

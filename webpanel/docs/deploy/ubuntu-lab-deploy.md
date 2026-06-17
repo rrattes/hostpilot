@@ -532,3 +532,20 @@ Notes:
   validation-command issue; the Agent-controlled apply/disable/re-apply jobs ran
   `nginx -t` successfully as part of the controlled workflow.
 - No product code changes were required.
+
+## 2026-06-17 Core + Web v0.1 Final Validation Summary
+
+Final v0.1 validation result: passed for controlled Ubuntu lab use.
+
+- Lab IP: `192.168.0.64`.
+- Core health: HTTP `200`.
+- Agent health: HTTP `200`.
+- UI: HTTP `200` at `http://192.168.0.64:8080`.
+- Backend pytest: `108 passed`.
+- Agent pytest: `27 passed`.
+- Frontend build: passed.
+- Web v0.1 flow: passed.
+
+This validation confirms the controlled lab workflow only. It does not make the
+release production-hardened and does not add SSL automation, PHP-FPM management,
+application profiles, file write operations, or additional modules.

@@ -1,12 +1,12 @@
 # Core + Web v0.1 Release Checklist
 
-Date: 2026-06-16
+Date: 2026-06-17
 
-Scope: Core + Web only. This checklist intentionally excludes Docker, KVM, Remote Access, Cloudflare/DNS, SSL automation, PHP-FPM management, file upload/edit/delete/download, and production installer hardening.
+Scope: Core + Web only. This checklist intentionally excludes Docker, KVM, Remote Access, Cloudflare/DNS, SSL automation, PHP-FPM management, WordPress/Ghost profiles, file upload/edit/delete/download, and production installer hardening.
 
 ## Result
 
-Overall result: **Pass for controlled v0.1 lab/admin release, with new Ubuntu lab base deployment validated.**
+Overall result: **Pass for controlled Ubuntu lab v0.1/admin release.**
 
 ## Local Validation
 
@@ -37,7 +37,7 @@ Overall result: **Pass for controlled v0.1 lab/admin release, with new Ubuntu la
 | Jobs | Pass | Jobs list is visible; dev-only mock job creation is hidden unless dev mode is enabled. |
 | Notifications | Pass | List/read/read-all flows exist. |
 | Core backups | Limited | Basic archive creation exists; restore/scheduling/remote storage are later work. |
-| Agent status | Pass | UI/backend distinguish `connected`, `fallback`, and `unavailable`. |
+| Agent status/preflight | Pass | UI/backend distinguish `connected`, `fallback`, and `unavailable`; Web preflight blocks controlled actions unless the real Agent is connected and checks pass. |
 | Dev/mock actions | Pass | Hidden by default and labeled development-only when enabled. |
 
 ## Web Checklist
@@ -84,6 +84,16 @@ Overall result: **Pass for controlled v0.1 lab/admin release, with new Ubuntu la
 | Audit/job records on lab | Pass | Apply/disable/re-apply job records and Web/Agent audit records exist. |
 
 Previous controlled Nginx apply validation on the Ubuntu lab is documented in `docs/deploy/ubuntu-lab-deploy.md`.
+
+## Known Limitations
+
+- This is validated as a controlled Ubuntu lab v0.1, not a production-hardened release.
+- SSL automation is not implemented.
+- PHP-FPM installation/configuration/management is not implemented.
+- WordPress/Ghost application profiles are not implemented.
+- File upload/edit/delete/download are intentionally absent from the file browser.
+- Docker, KVM, and Remote Access modules are not included in v0.1.
+- Domain/DNS automation, live log streaming, backup restore/scheduling/remote storage, and role-definition editing remain later work.
 
 ## Release Decision
 

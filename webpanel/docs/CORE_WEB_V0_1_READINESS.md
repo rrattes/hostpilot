@@ -1,6 +1,6 @@
 # Core + Web v0.1 Readiness
 
-Date: 2026-06-16
+Date: 2026-06-17
 
 Scope: HostPilot Core and Web only. Docker, KVM, SSL automation, PHP-FPM management, Remote Access, Cloudflare/DNS automation, and production installer work are outside v0.1.
 
@@ -80,15 +80,15 @@ Remaining limitations are known and intentionally scoped out of v0.1. The most i
 | Apply plan | Ready | `backend/app/api/web.py`, `frontend/src/pages/WebPage.tsx` | Plan is read-only and requires `ready_to_apply`. |
 | Dry-run | Ready | `backend/app/api/web.py`, `frontend/src/pages/WebPage.tsx` | Does not execute commands or write files. |
 | Web Agent preflight | Ready | `backend/app/api/web.py`, `frontend/src/pages/WebPage.tsx`, `backend/tests/test_web.py` | Checks Agent state, required allowlisted actions, allowed Web base, Nginx config base, commands, and path assumptions. Blocks controlled actions when not ready. |
-| Controlled apply | Ready with lab requirement | `backend/app/api/web.py`, `agent/webpanel_agent/actions/nginx.py`, `agent/tests/test_nginx_apply_action.py` | Backend/Agent tests pass. Must be exercised on Ubuntu lab with real connected Agent before using against a host. |
-| Controlled disable/reapply | Ready with lab requirement | `backend/app/api/web.py`, `agent/webpanel_agent/actions/nginx.py`, `backend/tests/test_web.py` | Same lab requirement as apply. |
+| Controlled apply | Ready for controlled lab v0.1 | `backend/app/api/web.py`, `agent/webpanel_agent/actions/nginx.py`, `agent/tests/test_nginx_apply_action.py`, `docs/deploy/ubuntu-lab-deploy.md` | Backend/Agent tests pass and the full apply flow passed on the Ubuntu lab with real connected Agent/preflight. |
+| Controlled disable/reapply | Ready for controlled lab v0.1 | `backend/app/api/web.py`, `agent/webpanel_agent/actions/nginx.py`, `backend/tests/test_web.py`, `docs/deploy/ubuntu-lab-deploy.md` | Disable and re-apply passed on the Ubuntu lab with real connected Agent/preflight. |
 | Files read-only viewer | Ready | `backend/app/api/web.py`, `frontend/src/pages/WebPage.tsx`, `agent/webpanel_agent/actions/nginx.py` | Path constrained, metadata-only, paginated/limited, and root-loading behavior exists. |
 | Logs read-only viewer | Ready | `backend/app/api/web.py`, `frontend/src/pages/WebPage.tsx`, `agent/webpanel_agent/actions/nginx.py` | Read-only, max-line constrained, path constrained. |
 | Frontend loading/error states | Ready | `frontend/src/core/api/client.ts`, Core/Web pages | API errors are normalized and loading states reset in the reviewed flows. |
 | API response consistency | Ready | `frontend/src/core/api/client.ts` | Handles FastAPI detail strings, lists, objects, and validation arrays. |
 | Migrations/seeds | Ready | Alembic versions through current head | Covers Core, RBAC, notifications, backups, Web, validation, readiness, and permission repair. |
 | Windows dev flow | Ready | Local validation on 2026-06-16 | Web record creation, list, preview, readiness, plan, and dry-run work without Agent/Nginx. Controlled apply blocks in fallback. |
-| Ubuntu lab flow | Blocked for current rerun | `docs/deploy/ubuntu-lab-deploy.md` | Previous controlled apply validation exists. Current rerun is blocked by lab reachability from this workstation. |
+| Ubuntu lab flow | Ready for controlled lab v0.1 | `docs/deploy/ubuntu-lab-deploy.md` | New lab `192.168.0.64` passed Core health `200`, Agent health `200`, UI `200`, backend pytest `108 passed`, Agent pytest `27 passed`, frontend build, and the full Web v0.1 flow. |
 
 ## Fixed v0.1 Blockers
 
@@ -122,11 +122,13 @@ v0.1 decision: **keep a simple 60-minute stateless JWT session.**
 - The new Ubuntu lab is validated for the Core/Web v0.1 flow, but it remains a disposable test host.
 - SSL automation is not implemented.
 - PHP-FPM installation/configuration/management is not implemented.
+- WordPress/Ghost application profiles are not implemented.
 - Domain/DNS automation is not implemented.
 - File upload/edit/delete/download are intentionally absent.
 - Live log streaming is not implemented.
 - Core backup restore/scheduling/remote-storage flows are not implemented.
 - Role definition editing is not included.
+- Docker, KVM, and Remote Access modules are not included in v0.1.
 - Windows dev fallback is useful for local testing but is not a real connected Agent.
 
 ## Ordered Fix Plan After v0.1

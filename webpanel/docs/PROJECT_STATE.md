@@ -1,13 +1,13 @@
 # HostPilot Project State
 
-Last updated: 2026-06-16
+Last updated: 2026-06-17
 
 ## Workspace
 
 - Official workspace: `C:\Users\Admin\OneDrive\Documentos\HostPilot_RECOVERY_CLEAN\webpanel`
 - Legacy workspace to avoid: `C:\Users\Admin\OneDrive\Documentos\WebManager\webpanel`
 - Current branch at time of this state update: `main`
-- Current pre-state commit: `151d318135969eb194b5b5f112e7cd8d17629e8f`
+- Current pre-state commit: `1b2c9243ff7773a99abb6d5a7efaa436df3f8803`
 - Local services:
   - Frontend: `http://127.0.0.1:5173`
   - Backend: `http://127.0.0.1:8000`
@@ -134,6 +134,8 @@ Last updated: 2026-06-16
 ## Known Limits For v0.1
 
 - v0.1 is a controlled lab/admin release, not a production installer.
+- Production hardening plan exists at `docs/PRODUCTION_HARDENING_PLAN.md`.
+- Current state remains controlled lab/admin v0.1 and is not production-ready yet.
 - Windows dev intentionally uses Agent fallback when the local Agent is unavailable; controlled Nginx actions require a real connected Agent.
 - Ubuntu lab Core/Web/Agent deployment was completed on 2026-06-16 for `192.168.0.64`.
 - SSL automation is not implemented.
